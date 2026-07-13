@@ -7,8 +7,19 @@ import { Suspense } from "react"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Psychology Test Scoring Platform",
-  description: "Professional tool for converting psychology questionnaire responses to numerical scores",
+  title: {
+    default: "APAS · Clinical Overwatch",
+    template: "%s · APAS",
+  },
+  description:
+    "Professional tool for converting psychology questionnaire responses to numerical scores",
+  openGraph: {
+    title: "APAS · Clinical Overwatch",
+    description:
+      "Clinical intelligence for modern psychology practice — monitor assessments, track severity trends, and act on alerts.",
+    siteName: "APAS",
+    type: "website",
+  },
   generator: "v0.app",
 }
 
@@ -22,8 +33,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${GeistSans.className} ${GeistSans.variable} ${GeistMono.variable} antialiased`}>
         <Providers>
           <Suspense fallback={null}>{children}</Suspense>
         </Providers>

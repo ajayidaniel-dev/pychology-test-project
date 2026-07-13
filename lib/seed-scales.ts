@@ -61,7 +61,8 @@ export const LIBRARY_SCALES = [
   },
   {
     name: 'BDI-II',
-    description: 'Beck Depression Inventory — 21-item depression assessment. Over the past two weeks, please select the statement that best describes how you have been feeling.',
+    description:
+      '21-item depression assessment.\n\nOver the past two weeks, please select the statement that best describes how you have been feeling.',
     isLibrary: true,
     items: [
       {
@@ -321,7 +322,8 @@ export const LIBRARY_SCALES = [
   },
   {
     name: 'PCL-5',
-    description: 'PTSD Checklist for DSM-5 — 20-item PTSD screen. In the past month, how much were you bothered by:',
+    description:
+      '20-item PTSD screen.\n\nIn the past month, how much were you bothered by the following?',
     isLibrary: true,
     items: [
       { order: 1,  text: 'Repeated, disturbing, and unwanted memories of the stressful experience', type: 'MULTIPLE_CHOICE', options: PCL5_OPTIONS },

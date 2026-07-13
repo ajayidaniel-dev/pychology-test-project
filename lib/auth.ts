@@ -4,6 +4,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import prisma from '@/lib/prisma'
 import { verifyPassword } from '@/lib/password'
+import { createLoginNotification } from '@/lib/notifications'
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -44,6 +45,13 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: '/auth/signin',
+  },
+  events: {
+    async signIn({ user }) {
+      if (user.id) {
+        await createLoginNotification(user.id)
+      }
+    },
   },
   secret: process.env.NEXTAUTH_SECRET,
 }

@@ -1,7 +1,14 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
-import { Copy, Check } from 'lucide-react'
+import { useState } from "react"
+import { toast } from "sonner"
+import { Check, Copy } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 export function CopyLinkButton({ token }: { token: string }) {
   const [copied, setCopied] = useState(false)
@@ -10,15 +17,33 @@ export function CopyLinkButton({ token }: { token: string }) {
     const url = `${window.location.origin}/fill/${token}`
     navigator.clipboard.writeText(url)
     setCopied(true)
+    toast.success("Link copied")
     setTimeout(() => setCopied(false), 2000)
   }
 
   return (
-    <button
-      onClick={copy}
-      className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 text-xs"
-    >
-      {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy link</>}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={copy}
+          className="relative z-20 h-8 gap-1 px-2 text-xs"
+        >
+          {copied ? (
+            <>
+              <Check className="size-3.5" />
+              Copied
+            </>
+          ) : (
+            <>
+              <Copy className="size-3.5" />
+              Copy link
+            </>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Copy questionnaire link</TooltipContent>
+    </Tooltip>
   )
 }

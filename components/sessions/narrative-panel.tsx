@@ -1,23 +1,58 @@
-'use client'
+"use client"
 
-import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Loader2, CheckCircle, AlertTriangle } from 'lucide-react'
+import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
+import { AlertTriangle, CheckCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const SCALE_NAMES: Record<string, string> = { PHQ9: 'PHQ-9', BDI2: 'BDI-II', GAD7: 'GAD-7' }
+const SCALE_NAMES: Record<string, string> = {
+  PHQ9: "PHQ-9",
+  BDI2: "BDI-II",
+  GAD7: "GAD-7",
+}
 
 interface Props {
   clinicalPayload: {
     scale: string
+    scaleName?: string
     totalScore: number
     severity: string
     itemScores: Record<string, number>
+    itemLabels?: Record<string, string>
     suicidalIdeation: boolean
   }
   sessionId: string
   patientId: string
   initialReviewed?: boolean
   initialEscalated?: boolean
+}
+
+function buildPrompt(payload: Props["clinicalPayload"]): string {
+  const items = Object.entries(payload.itemScores)
+    .map(([k, v]) => {
+      const label = payload.itemLabels?.[k] ?? `Item ${k}`
+      return `${label}: ${v}`
+    })
+    .join(", ")
+
+  return `You are a clinical psychologist assistant providing a structured clinical summary for a clinician's review. Do not make a diagnosis. Do not address the participant directly. Use professional clinical language. You have no identifying information about this person.
+
+Scale: ${SCALE_NAMES[payload.scale] ?? payload.scaleName ?? payload.scale}
+Total score: ${payload.totalScore} — Severity: ${payload.severity}
+Item scores: ${items}
+${payload.suicidalIdeation ? "NOTE: Suicidal ideation item is endorsed above zero. This must be flagged as the first clinical priority." : ""}
+
+Write a clinical summary of 4–5 sentences: (1) overall severity with reference to the score, (2) most clinically significant item-level patterns, (3) any safety-relevant endorsements, (4) recommended follow-up priority (routine / priority / urgent) with brief rationale.`
 }
 
 export function NarrativePanel({
@@ -32,91 +67,154 @@ export function NarrativePanel({
   const [error, setError] = useState<string | null>(null)
   const [reviewed, setReviewed] = useState(initialReviewed)
   const [escalated, setEscalated] = useState(initialEscalated)
-  const [actionLoading, setActionLoading] = useState<'reviewed' | 'escalated' | null>(null)
+  const [actionLoading, setActionLoading] = useState<"reviewed" | "escalated" | null>(null)
+  const [fetchKey, setFetchKey] = useState(0)
 
-  async function recordAction(action: 'reviewed' | 'escalated') {
+  const fetchNarrative = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    setNarrative(null)
+
+    try {
+      const res = await fetch("/api/narrative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: buildPrompt(clinicalPayload) }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to generate summary")
+      }
+      setNarrative(data.content?.[0]?.text ?? "Unable to generate summary.")
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Failed to generate summary. Check your API key.",
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [clinicalPayload, fetchKey])
+
+  useEffect(() => {
+    fetchNarrative()
+  }, [fetchNarrative])
+
+  async function recordAction(action: "reviewed" | "escalated") {
     setActionLoading(action)
-    await fetch(`/api/patients/${patientId}/sessions/${sessionId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch(`/api/patients/${patientId}/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     })
-    if (action === 'reviewed') setReviewed(true)
-    else setEscalated(true)
     setActionLoading(null)
+
+    if (!res.ok) {
+      toast.error(`Failed to mark as ${action}`)
+      return
+    }
+
+    if (action === "reviewed") {
+      setReviewed(true)
+      toast.success("Marked as reviewed")
+    } else {
+      setEscalated(true)
+      toast.success("Escalated to supervisor")
+    }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const items = Object.entries(clinicalPayload.itemScores)
-      .map(([k, v]) => `Item ${k}: ${v}`)
-      .join(', ')
-
-    const prompt = `You are a clinical psychologist assistant providing a structured clinical summary for a clinician's review. Do not make a diagnosis. Do not address the participant directly. Use professional clinical language. You have no identifying information about this person.
-
-Scale: ${SCALE_NAMES[clinicalPayload.scale]}
-Total score: ${clinicalPayload.totalScore} — Severity: ${clinicalPayload.severity}
-Item scores: ${items}
-${clinicalPayload.suicidalIdeation ? 'NOTE: Item 9 is endorsed above zero. This must be flagged as the first clinical priority.' : ''}
-
-Write a clinical summary of 4–5 sentences: (1) overall severity with reference to the score, (2) most clinically significant item-level patterns, (3) any safety-relevant endorsements, (4) recommended follow-up priority (routine / priority / urgent) with brief rationale.`
-
-    fetch('/api/narrative', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    })
-      .then(r => r.json())
-      .then(data => {
-        setNarrative(data.content?.[0]?.text ?? 'Unable to generate summary.')
-        setLoading(false)
-      })
-      .catch(() => {
-        setError('Failed to generate summary. Check your API key.')
-        setLoading(false)
-      })
-  }, [])
-
   return (
-    <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
-      <h2 className="text-sm font-semibold text-slate-700">AI Clinical Summary</h2>
-
-      {loading && (
-        <div className="flex items-center gap-2 text-slate-400 text-sm py-4">
-          <Loader2 size={16} className="animate-spin" /> Generating clinical summary…
+    <Card className="shadow-sm">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle className="text-base">AI Clinical Summary</CardTitle>
+          <CardDescription>
+            AI-generated summary for clinician review only. Not a substitute for
+            professional clinical judgment.
+          </CardDescription>
         </div>
-      )}
+        <div className="flex flex-wrap gap-2">
+          {reviewed && (
+            <Badge variant="secondary" className="gap-1">
+              <CheckCircle className="size-3" />
+              Reviewed
+            </Badge>
+          )}
+          {escalated && (
+            <Badge
+              variant="outline"
+              className="gap-1 border-severity-moderate/40 text-severity-moderate"
+            >
+              <AlertTriangle className="size-3" />
+              Escalated
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
+      <CardContent className="space-y-4">
+        {loading && (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-full" />
+            ))}
+          </div>
+        )}
 
-      {narrative && (
-        <p className="text-sm text-slate-700 leading-relaxed">{narrative}</p>
-      )}
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Summary unavailable</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>{error}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-destructive/30 bg-background"
+                onClick={() => setFetchKey((k) => k + 1)}
+              >
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <div className="flex gap-2 pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => !reviewed && recordAction('reviewed')}
-          disabled={reviewed || actionLoading === 'reviewed'}
-          className={reviewed ? 'border-green-400 text-green-600' : ''}
-        >
-          {reviewed
-            ? <><CheckCircle size={14} className="mr-1" /> Reviewed</>
-            : actionLoading === 'reviewed' ? 'Saving…' : 'Mark Reviewed'}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => !escalated && recordAction('escalated')}
-          disabled={escalated || actionLoading === 'escalated'}
-          className={escalated ? 'border-orange-400 text-orange-600' : ''}
-        >
-          {escalated
-            ? <><AlertTriangle size={14} className="mr-1" /> Escalated</>
-            : actionLoading === 'escalated' ? 'Saving…' : 'Escalate to Supervisor'}
-        </Button>
-      </div>
-    </div>
+        {narrative && !loading && (
+          <div
+            aria-live="polite"
+            className="prose prose-sm dark:prose-invert max-w-prose leading-relaxed text-foreground"
+          >
+            <p>{narrative}</p>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={() => !reviewed && recordAction("reviewed")}
+            disabled={reviewed || actionLoading === "reviewed"}
+          >
+            {reviewed
+              ? "Reviewed"
+              : actionLoading === "reviewed"
+                ? "Saving…"
+                : "Mark Reviewed"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full border-severity-moderate/40 text-severity-moderate hover:bg-severity-moderate/10 sm:w-auto"
+            onClick={() => !escalated && recordAction("escalated")}
+            disabled={escalated || actionLoading === "escalated"}
+          >
+            {escalated
+              ? "Escalated"
+              : actionLoading === "escalated"
+                ? "Saving…"
+                : "Escalate to Supervisor"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

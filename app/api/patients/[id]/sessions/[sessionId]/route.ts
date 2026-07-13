@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { resolveUnreviewedForSession } from '@/lib/notifications'
 import { z } from 'zod'
 
 export async function GET(
@@ -63,6 +64,10 @@ export async function PATCH(
     where: { sessionId: params.sessionId },
     data,
   })
+
+  if (parsed.data.action === 'reviewed') {
+    await resolveUnreviewedForSession(params.sessionId)
+  }
 
   return NextResponse.json(updated)
 }

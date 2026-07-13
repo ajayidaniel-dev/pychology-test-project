@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { isTokenExpired } from '@/lib/token'
 import { computeNumericScore, lookupSeverity } from '@/lib/scale-scoring'
+import { createSessionSubmitNotifications } from '@/lib/notifications'
 import { z } from 'zod'
 
 export async function GET(req: NextRequest, { params }: { params: { token: string } }) {
@@ -38,7 +39,10 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const assessmentSession = await prisma.assessmentSession.findUnique({
     where: { token: params.token },
     include: {
-      scale: { include: { thresholds: { orderBy: { minScore: 'asc' } } } },
+      patient: { select: { anonymousId: true } },
+      scale: {
+        include: { thresholds: { orderBy: { minScore: 'asc' } } },
+      },
     },
   })
 
@@ -63,6 +67,17 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       data: { status: 'COMPLETED' },
     }),
   ])
+
+  await createSessionSubmitNotifications({
+    sessionId: assessmentSession.id,
+    patientId: assessmentSession.patientId,
+    psychologistId: assessmentSession.psychologistId,
+    anonymousId: assessmentSession.patient.anonymousId,
+    scaleName: assessmentSession.scale.name,
+    totalScore,
+    itemScores: itemScores as Record<string, number>,
+    storedSeverity: severity,
+  })
 
   return NextResponse.json({ ok: true })
 }

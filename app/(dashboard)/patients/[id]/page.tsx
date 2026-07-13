@@ -1,139 +1,176 @@
-import { getServerSession } from 'next-auth'
-import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
-import { SessionChart } from '@/components/sessions/session-chart'
-import { NewSessionDialog } from '@/components/sessions/new-session-dialog'
-import { CopyLinkButton } from '@/components/sessions/copy-link-button'
-import { computeAlerts } from '@/lib/alert-rules'
-import { PatientActions } from '@/components/patients/patient-actions'
+import dynamic from "next/dynamic"
+import type { Metadata } from "next"
+import { getServerSession } from "next-auth"
+import { redirect, notFound } from "next/navigation"
+import { AlertTriangle } from "lucide-react"
+import { authOptions } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import { NewSessionDialog } from "@/components/sessions/new-session-dialog"
+import { computeAlerts } from "@/lib/alert-rules"
+import { scaleNameToEnum } from "@/lib/patient-summary"
+import { computeChartTrend, TREND_LABELS } from "@/lib/chart-trend"
+import { PatientActions } from "@/components/patients/patient-actions"
+import { PatientProfileHeader } from "@/components/patients/patient-profile-header"
+import { PatientSessionsSection } from "@/components/patients/patient-sessions-section"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import type { SeverityLevel } from "@/components/ui/severity-badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
-export default async function PatientProfilePage({ params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect('/auth/signin')
+const SessionChart = dynamic(
+  () =>
+    import("@/components/sessions/session-chart").then((m) => ({
+      default: m.SessionChart,
+    })),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-[220px] w-full rounded-lg" />,
+  },
+)
 
-  const SCALE_NAME_TO_ENUM: Record<string, string> = {
-    'PHQ-9': 'PHQ9', 'BDI-II': 'BDI2', 'GAD-7': 'GAD7',
+function toSeverityLevel(severity: string | null): SeverityLevel | null {
+  if (severity === "critical" || severity === "high" || severity === "moderate") {
+    return severity
   }
+  if (severity === "low") return "low"
+  return null
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string }
+}): Promise<Metadata> {
+  const session = await getServerSession(authOptions)
+  if (!session) return { title: "Patient" }
+
+  const patient = await prisma.patient.findFirst({
+    where: { id: params.id, psychologistId: session.user.id },
+    select: { displayName: true, anonymousId: true },
+  })
+
+  const label = patient?.displayName ?? patient?.anonymousId ?? "Patient"
+  return { title: label }
+}
+
+export default async function PatientProfilePage({
+  params,
+}: {
+  params: { id: string }
+}) {
+  const session = await getServerSession(authOptions)
+  if (!session) redirect("/auth/signin")
 
   const patient = await prisma.patient.findFirst({
     where: { id: params.id, psychologistId: session.user.id },
     include: {
       assessmentSessions: {
         include: { response: true, scale: true },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       },
     },
   })
 
   if (!patient) notFound()
 
-  const completed = patient.assessmentSessions.filter(s => s.response)
+  const completed = patient.assessmentSessions.filter((s) => s.response)
   const latest = completed.at(-1)
 
-  // Only plot sessions for the same scale as the latest session so scores are comparable
   const latestScaleId = latest?.scaleId
   const chartSessions = latestScaleId
-    ? completed.filter(s => s.scaleId === latestScaleId)
+    ? completed.filter((s) => s.scaleId === latestScaleId)
     : completed
   const chartData = chartSessions.map((s, i) => ({
     session: i + 1,
     score: s.response!.totalScore,
   }))
+  const trend = computeChartTrend(chartData)
 
   const latestAlerts = latest?.response
     ? computeAlerts(
-        SCALE_NAME_TO_ENUM[latest.scale.name] ?? latest.scale.name,
+        scaleNameToEnum(latest.scale.name),
         latest.response.totalScore,
         latest.response.itemScores as Record<string, number>,
-        latest.response.severity
+        latest.response.severity,
       )
     : null
 
+  const headerSeverity = latestAlerts?.severity
+    ? toSeverityLevel(latestAlerts.severity)
+    : null
+
+  const sessionRows = patient.assessmentSessions.map((s, i) => ({
+    id: s.id,
+    index: i + 1,
+    scaleName: s.scale.name,
+    status: s.status,
+    score: s.response?.totalScore ?? null,
+    severity: s.response?.severity ?? null,
+    token: s.token,
+  }))
+
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-slate-900">{patient.anonymousId}</h1>
-            {patient.displayName && (
-              <span className="text-sm text-slate-400">{patient.displayName}</span>
-            )}
-            {latestAlerts?.severity === 'critical' && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">Critical</span>
-            )}
-            <PatientActions patientId={patient.id} currentDisplayName={patient.displayName ?? patient.anonymousId} />
+    <div className="flex flex-col gap-6">
+      <PatientProfileHeader
+        anonymousId={patient.anonymousId}
+        displayName={patient.displayName}
+        completedCount={completed.length}
+        severity={headerSeverity}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <NewSessionDialog patientId={patient.id} />
+            <PatientActions
+              patientId={patient.id}
+              currentDisplayName={patient.displayName ?? patient.anonymousId}
+            />
           </div>
-          <p className="text-slate-500 text-sm mt-1">
-            {completed.length} completed session{completed.length !== 1 ? 's' : ''}
-          </p>
-        </div>
-        <NewSessionDialog patientId={patient.id} />
-      </div>
+        }
+      />
 
       {latestAlerts?.suicidalIdeation && (
-        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
-          ⚠ Suicidal ideation endorsed — immediate clinical attention required
-        </div>
+        <Alert variant="destructive" role="alert">
+          <AlertTriangle />
+          <AlertTitle>Suicidal ideation endorsed</AlertTitle>
+          <AlertDescription>
+            Immediate clinical attention required. Review the latest assessment
+            and follow your safety protocol.
+          </AlertDescription>
+        </Alert>
       )}
 
-      {completed.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg p-5">
-          <h2 className="text-sm font-semibold text-slate-700 mb-4">Score History — {latest?.scale.name}</h2>
-          <SessionChart scale={SCALE_NAME_TO_ENUM[latest!.scale.name] ?? latest!.scale.name} data={chartData} />
-        </div>
+      {completed.length > 0 && latest && (
+        <Card className="shadow-sm">
+          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base">
+                Score History — {latest.scale.name}
+              </CardTitle>
+              <CardDescription>
+                Sessions on the same scale for comparable scores
+              </CardDescription>
+            </div>
+            <Badge variant="outline">{TREND_LABELS[trend]}</Badge>
+          </CardHeader>
+          <CardContent className="max-w-3xl">
+            <SessionChart
+              scale={scaleNameToEnum(latest.scale.name)}
+              data={chartData}
+            />
+          </CardContent>
+        </Card>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-800">Sessions</h2>
-        </div>
-        {patient.assessmentSessions.length === 0 ? (
-          <div className="p-8 text-center text-slate-400 text-sm">
-            No sessions yet. Click "New Session" to create one.
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>
-                {['#', 'Scale', 'Status', 'Score', 'Severity', 'Action'].map(h => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wide">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {patient.assessmentSessions.map((s, i) => (
-                <tr key={s.id} className="hover:bg-slate-50">
-                  <td className="px-5 py-3 text-slate-500">{i + 1}</td>
-                  <td className="px-5 py-3 text-slate-700">{s.scale.name}</td>
-                  <td className="px-5 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      s.status === 'COMPLETED' ? 'bg-green-100 text-green-700'
-                      : s.status === 'PENDING' ? 'bg-amber-100 text-amber-700'
-                      : 'bg-slate-100 text-slate-500'
-                    }`}>{s.status}</span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-800">{s.response?.totalScore ?? '—'}</td>
-                  <td className="px-5 py-3 text-slate-500">{s.response?.severity ?? '—'}</td>
-                  <td className="px-5 py-3">
-                    {s.status === 'COMPLETED' ? (
-                      <Link
-                        href={`/patients/${patient.id}/sessions/${s.id}`}
-                        className="text-indigo-600 text-xs hover:underline"
-                      >
-                        View AI Summary →
-                      </Link>
-                    ) : s.status === 'PENDING' ? (
-                      <CopyLinkButton token={s.token} />
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <PatientSessionsSection
+        patientId={patient.id}
+        sessions={sessionRows}
+      />
     </div>
   )
 }
