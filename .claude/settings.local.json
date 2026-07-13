@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(npx tsc *)",
+      "Bash(git stash *)",
+      "Bash(npx prisma *)"
+    ]
+  }
+}

@@ -27,7 +27,7 @@ export async function GET(
 }
 
 const PatchResponseSchema = z.object({
-  action: z.enum(['reviewed', 'escalated']),
+  action: z.enum(['reviewed']),
 })
 
 export async function PATCH(
@@ -54,20 +54,12 @@ export async function PATCH(
   const parsed = PatchResponseSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const now = new Date()
-  const data =
-    parsed.data.action === 'reviewed'
-      ? { reviewedAt: now }
-      : { escalatedAt: now }
-
   const updated = await prisma.questionnaireResponse.update({
     where: { sessionId: params.sessionId },
-    data,
+    data: { reviewedAt: new Date() },
   })
 
-  if (parsed.data.action === 'reviewed') {
-    await resolveUnreviewedForSession(params.sessionId)
-  }
+  await resolveUnreviewedForSession(params.sessionId)
 
   return NextResponse.json(updated)
 }
