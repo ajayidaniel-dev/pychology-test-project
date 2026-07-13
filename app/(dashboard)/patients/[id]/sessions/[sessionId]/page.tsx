@@ -89,16 +89,6 @@ export default async function SessionDetailPage({
     isSafetyItem: alerts.suicidalIdeation && key === "9",
   }))
 
-  const clinicalPayload = {
-    scale: scaleEnum,
-    scaleName: assessmentSession.scale.name,
-    totalScore: assessmentSession.response.totalScore,
-    severity: assessmentSession.response.severity,
-    itemScores,
-    itemLabels: itemLabelMap,
-    suicidalIdeation: alerts.suicidalIdeation,
-  }
-
   const severity = toSeverityLevel(alerts.severity)
 
   return (
@@ -131,11 +121,9 @@ export default async function SessionDetailPage({
       <ItemScoresSection items={itemRows} />
 
       <NarrativePanel
-        clinicalPayload={clinicalPayload}
         sessionId={assessmentSession.id}
         patientId={params.id}
         initialReviewed={!!assessmentSession.response.reviewedAt}
-        initialEscalated={!!assessmentSession.response.escalatedAt}
       />
     </div>
   )

@@ -137,6 +137,8 @@ model QuestionnaireResponse {
   completedAt  DateTime          @default(now())
   reviewedAt   DateTime?
   escalatedAt  DateTime?
+  narrative            Json?
+  narrativeGeneratedAt DateTime?
   session      AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
