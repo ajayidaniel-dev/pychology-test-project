@@ -51,31 +51,10 @@ const columns: ColumnDef<ScaleTableRow>[] = [
       <DataTableColumnHeader column={column} title="Items" />
     ),
     cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.original._count?.items ?? "—"}
-      </span>
-    ),
-  },
-  {
-    id: "type",
-    accessorKey: "isLibrary",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Type" />
-    ),
-    cell: ({ row }) => (
-      <div className="flex items-center justify-end gap-2">
-        <div
-          className={cn(
-            "flex size-8 items-center justify-center rounded-lg",
-            row.original.isLibrary ? "bg-primary/10" : "bg-muted",
-          )}
-        >
-          {row.original.isLibrary ? (
-            <BookOpen className="size-4 text-primary" />
-          ) : (
-            <User className="size-4 text-muted-foreground" />
-          )}
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-muted-foreground">
+          {row.original._count?.items ?? "—"}
+        </span>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
       </div>
     ),
@@ -91,9 +70,15 @@ export function ScalesTable({
   scales,
   searchPlaceholder = "Search scales…",
 }: ScalesTableProps) {
+  const hasDescriptions = scales.some((s) => s.description)
+  const visibleColumns = columns.filter((column) => {
+    if ("accessorKey" in column && column.accessorKey === "description") return hasDescriptions
+    return true
+  })
+
   return (
     <TanStackDataTable
-      columns={columns}
+      columns={visibleColumns}
       data={scales}
       getRowHref={(row) => `/scales/${row.id}`}
       enableSearch

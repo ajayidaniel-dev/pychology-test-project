@@ -59,9 +59,17 @@ const columns: ColumnDef<CaseloadPatient>[] = [
 ]
 
 export function CaseloadTable({ patients }: { patients: CaseloadPatient[] }) {
+  const hasScales = patients.some((p) => p.latestScaleName != null)
+  const hasScores = patients.some((p) => p.latestScore != null)
+  const visibleColumns = columns.filter((column) => {
+    if ("accessorKey" in column && column.accessorKey === "latestScaleName") return hasScales
+    if (column.id === "score") return hasScores
+    return true
+  })
+
   return (
     <TanStackDataTable
-      columns={columns}
+      columns={visibleColumns}
       data={patients}
       getRowHref={(row) => `/patients/${row.id}`}
       shell={false}

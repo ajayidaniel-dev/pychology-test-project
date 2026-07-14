@@ -41,7 +41,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     },
   })
 
-  const fillUrl = `${process.env.NEXTAUTH_URL}/fill/${token}`
+  // Prefer the host the request actually came in on; behind a proxy that is
+  // the forwarded host. NEXTAUTH_URL is only a last resort.
+  const proto = req.headers.get('x-forwarded-proto') ?? req.nextUrl.protocol.replace(':', '')
+  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
+  const origin = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL ?? req.nextUrl.origin)
+  const fillUrl = `${origin}/fill/${token}`
 
   return NextResponse.json({ ...assessmentSession, fillUrl }, { status: 201 })
 }

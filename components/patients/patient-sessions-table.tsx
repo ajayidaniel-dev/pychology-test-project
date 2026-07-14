@@ -114,9 +114,17 @@ export function PatientSessionsTable({
   patientId,
   sessions,
 }: PatientSessionsTableProps) {
+  const hasScores = sessions.some((s) => s.score != null)
+  const hasSeverity = sessions.some((s) => severityToLevel(s.severity))
+  const columns = buildColumns(patientId).filter((column) => {
+    if (column.id === "score" || ("accessorKey" in column && column.accessorKey === "score")) return hasScores
+    if ("accessorKey" in column && column.accessorKey === "severity") return hasSeverity
+    return true
+  })
+
   return (
     <TanStackDataTable
-      columns={buildColumns(patientId)}
+      columns={columns}
       data={sessions}
       shell={false}
       isRowClickable={(row) => row.status === "COMPLETED"}
