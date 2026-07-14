@@ -95,6 +95,7 @@ export default async function SessionDetailPage({
     <div className="flex flex-col gap-6">
       <SessionDetailHeader
         patientId={params.id}
+        sessionId={assessmentSession.id}
         anonymousId={assessmentSession.patient.anonymousId}
         scaleName={assessmentSession.scale.name}
         completedAt={assessmentSession.response.completedAt}

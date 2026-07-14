@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, FileText } from "lucide-react"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -15,6 +15,7 @@ import type { SeverityLevel } from "@/components/ui/severity-badge"
 
 interface SessionDetailHeaderProps {
   patientId: string
+  sessionId: string
   anonymousId: string
   scaleName: string
   completedAt: Date
@@ -23,6 +24,7 @@ interface SessionDetailHeaderProps {
 
 export function SessionDetailHeader({
   patientId,
+  sessionId,
   anonymousId,
   scaleName,
   completedAt,
@@ -65,12 +67,20 @@ export function SessionDetailHeader({
         description={`Completed ${formattedDate}`}
       />
 
-      <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
-        <Link href={`/patients/${patientId}`}>
-          <ArrowLeft className="size-4" />
-          Back to patient
-        </Link>
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
+          <Link href={`/patients/${patientId}`}>
+            <ArrowLeft className="size-4" />
+            Back to patient
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" className="h-8 gap-1 px-2" asChild>
+          <Link href={`/patients/${patientId}/sessions/${sessionId}/report`}>
+            <FileText className="size-4" />
+            Report
+          </Link>
+        </Button>
+      </div>
     </div>
   )
 }

@@ -13,6 +13,7 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -263,6 +264,12 @@ export function NarrativePanel({
             <Section icon={ClipboardList} title="Item-level patterns">
               {narrative.itemPatterns}
             </Section>
+
+            {narrative.trend && (
+              <Section icon={TrendingUp} title="Trend across sessions">
+                {narrative.trend}
+              </Section>
+            )}
 
             {narrative.safetyConcern ? (
               <Alert variant="destructive" role="alert">

@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { computeAlerts } from '@/lib/alert-rules'
 import { scaleNameToEnum } from '@/lib/patient-summary'
+import { buildItemLines, buildHistoryBlock, callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const BodySchema = z.object({
@@ -53,6 +55,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set in .env.local' }, { status: 500 })
   }
 
+  const rate = checkRateLimit(`narrative-chat:${session.user.id}`, 10, 60_000)
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many questions in a short time. Wait a moment and try again.' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } },
+    )
+  }
+
   const itemScores = assessmentSession.response.itemScores as Record<string, number>
   const itemLabels = Object.fromEntries(
     assessmentSession.scale.items.map((item) => [String(item.order), item.text]),
@@ -63,21 +73,38 @@ export async function POST(req: NextRequest) {
     itemScores,
     assessmentSession.response.severity,
   )
-  const itemLines = Object.entries(itemScores)
-    .map(([k, v]) => `- ${itemLabels[k] ?? `Item ${k}`}: ${v}`)
-    .join('\n')
+  const itemLines = buildItemLines(itemScores, itemLabels)
+
+  const priorSessions = await prisma.assessmentSession.findMany({
+    where: {
+      patientId,
+      scaleId: assessmentSession.scaleId,
+      status: 'COMPLETED',
+      id: { not: assessmentSession.id },
+      response: { isNot: null },
+    },
+    include: { response: { select: { totalScore: true, severity: true, completedAt: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 8,
+  })
+  const history = priorSessions
+    .map((s) => s.response!)
+    .filter((r) => r.completedAt < assessmentSession.response!.completedAt)
+    .reverse()
+  const historyBlock = buildHistoryBlock(history)
 
   const storedNarrative = assessmentSession.response.narrative
     ? `\n\nAI clinical summary previously generated for this assessment:\n${JSON.stringify(assessmentSession.response.narrative, null, 2)}`
     : ''
 
-  const system = `You are a clinical psychologist assistant answering follow-up questions from a licensed clinician about one completed self-report assessment. You have no identifying information about the participant.
+  const system = `You are a clinical psychologist assistant answering follow-up questions from a licensed clinician about one completed self-report assessment. You have no identifying information about the participant. ${ASSESSMENT_DATA_RULE}
 
-Assessment context:
+<assessment_data>
 Scale: ${assessmentSession.scale.name}
 Total score: ${assessmentSession.response.totalScore} — Severity: ${assessmentSession.response.severity}
 Item scores:
 ${itemLines}
+${historyBlock}</assessment_data>
 ${alerts.suicidalIdeation ? '\nNOTE: The suicidal ideation item is endorsed above zero. Treat safety as the first clinical priority in any relevant answer.' : ''}${storedNarrative}
 
 Rules:
@@ -87,28 +114,17 @@ Rules:
 - If a question touches on suicidality or safety, remind the clinician to verify against the raw item scores and their own safety protocol.
 - Be concise: 2-5 sentences unless the question genuinely requires more.`
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 1024,
-      system,
-      messages,
-    }),
+  const result = await callAnthropic(apiKey, {
+    model: 'claude-sonnet-5',
+    max_tokens: 1024,
+    system,
+    messages,
   })
 
-  const data = await response.json()
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: data.error?.message ?? 'Claude API error' },
-      { status: response.status },
-    )
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status })
   }
+  const data = result.data
 
   if (data.stop_reason === 'refusal') {
     return NextResponse.json({ error: 'The model declined to answer this question.' }, { status: 502 })

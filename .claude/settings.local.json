@@ -5,7 +5,17 @@
       "Skill(claude-api:*)",
       "Bash(npx tsc *)",
       "Bash(git stash *)",
-      "Bash(npx prisma *)"
+      "Bash(npx prisma *)",
+      "Bash(git log *)",
+      "Bash(npx jest *)",
+      "Read(//Users/hh/.nvm/versions/node/**)",
+      "Read(//opt/homebrew/**)",
+      "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":1,\"2\":1,\"3\":1,\"4\":1,\"5\":1,\"6\":1,\"7\":1,\"8\":1,\"9\":0,\"99\":3}}')",
+      "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":5000,\"2\":1,\"3\":1,\"4\":1,\"5\":1,\"6\":1,\"7\":1,\"8\":1,\"9\":0}}')",
+      "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":1}}')",
+      "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":\"two\",\"2\":1,\"3\":1,\"4\":1,\"5\":1,\"6\":1,\"7\":1,\"8\":1,\"9\":0}}')",
+      "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":2,\"2\":1,\"3\":3,\"4\":2,\"5\":1,\"6\":0,\"7\":1,\"8\":0,\"9\":0}}')",
+      "Bash(curl -s http://localhost:3000/patients/cmrkjerox00016xfafb62bggh/sessions/cmrkjes9800036xfaxmngyktc/report)"
     ]
   }
 }

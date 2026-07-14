@@ -22,7 +22,7 @@ export function SignOut() {
           className="rounded-full"
         />
       )}
-      <Button onClick={() => signOut()}>Sign Out</Button>
+      <Button onClick={() => signOut({ callbackUrl: "/auth/signin" })}>Sign Out</Button>
     </div>
   )
 }

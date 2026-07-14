@@ -80,9 +80,17 @@ interface PatientListTableProps {
 }
 
 export function PatientListTable({ patients }: PatientListTableProps) {
+  const hasNames = patients.some((p) => p.displayName)
+  const hasScores = patients.some((p) => p.latestScore != null)
+  const visibleColumns = columns.filter((column) => {
+    if ("accessorKey" in column && column.accessorKey === "displayName") return hasNames
+    if (column.id === "score") return hasScores
+    return true
+  })
+
   return (
     <TanStackDataTable
-      columns={columns}
+      columns={visibleColumns}
       data={patients}
       getRowHref={(row) => `/patients/${row.id}`}
       enableSearch

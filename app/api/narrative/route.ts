@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { computeAlerts } from '@/lib/alert-rules'
 import { scaleNameToEnum } from '@/lib/patient-summary'
+import { buildItemLines, buildHistoryBlock, callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 
 const BodySchema = z.object({
@@ -15,6 +17,7 @@ const BodySchema = z.object({
 export type ClinicalNarrative = {
   overallSeverity: string
   itemPatterns: string
+  trend?: string
   safety: string
   safetyConcern: boolean
   followUpPriority: 'routine' | 'priority' | 'urgent'
@@ -24,6 +27,7 @@ export type ClinicalNarrative = {
 const NarrativeSchema = z.object({
   overallSeverity: z.string(),
   itemPatterns: z.string(),
+  trend: z.string().optional(),
   safety: z.string(),
   safetyConcern: z.boolean(),
   followUpPriority: z.enum(['routine', 'priority', 'urgent']),
@@ -42,6 +46,11 @@ const OUTPUT_JSON_SCHEMA = {
       type: 'string',
       description:
         'Two or three sentences on the most clinically significant item-level patterns.',
+    },
+    trend: {
+      type: 'string',
+      description:
+        'One or two sentences on the score trajectory across administrations of this scale. Empty string if this is the first administration.',
     },
     safety: {
       type: 'string',
@@ -64,6 +73,7 @@ const OUTPUT_JSON_SCHEMA = {
   required: [
     'overallSeverity',
     'itemPatterns',
+    'trend',
     'safety',
     'safetyConcern',
     'followUpPriority',
@@ -77,16 +87,19 @@ function buildPrompt(input: {
   totalScore: number
   severity: string
   itemLines: string
+  historyBlock: string
   suicidalIdeation: boolean
 }): string {
-  return `You are a clinical psychologist assistant providing a structured clinical summary for a clinician's review. Do not make a diagnosis. Do not address the participant directly. Use professional clinical language. You have no identifying information about this person.
+  return `You are a clinical psychologist assistant providing a structured clinical summary for a clinician's review. Do not make a diagnosis. Do not address the participant directly. Use professional clinical language. You have no identifying information about this person. ${ASSESSMENT_DATA_RULE}
 
+<assessment_data>
 Scale: ${input.scaleName}
 Total score: ${input.totalScore} — Severity: ${input.severity}
 Item scores:
 ${input.itemLines}
+${input.historyBlock}</assessment_data>
 ${input.suicidalIdeation ? 'NOTE: Suicidal ideation item is endorsed above zero. This must be flagged as the first clinical priority.' : ''}
-
+${input.historyBlock ? 'Comment on the score trajectory across administrations in the trend field.' : 'This is the first administration; return an empty string for the trend field.'}
 Produce the structured clinical summary.`
 }
 
@@ -128,6 +141,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set in .env.local' }, { status: 500 })
   }
 
+  const rate = checkRateLimit(`narrative:${session.user.id}`, 5, 60_000)
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many summary requests. Wait a moment and try again.' },
+      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } },
+    )
+  }
+
   const itemScores = assessmentSession.response.itemScores as Record<string, number>
   const itemLabels = Object.fromEntries(
     assessmentSession.scale.items.map((item) => [String(item.order), item.text]),
@@ -138,45 +159,51 @@ export async function POST(req: NextRequest) {
     itemScores,
     assessmentSession.response.severity,
   )
-  const itemLines = Object.entries(itemScores)
-    .map(([k, v]) => `- ${itemLabels[k] ?? `Item ${k}`}: ${v}`)
-    .join('\n')
+  const itemLines = buildItemLines(itemScores, itemLabels)
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
+  const priorSessions = await prisma.assessmentSession.findMany({
+    where: {
+      patientId,
+      scaleId: assessmentSession.scaleId,
+      status: 'COMPLETED',
+      id: { not: assessmentSession.id },
+      response: { isNot: null },
     },
-    body: JSON.stringify({
-      model: 'claude-sonnet-5',
-      max_tokens: 1024,
-      output_config: {
-        format: { type: 'json_schema', schema: OUTPUT_JSON_SCHEMA },
+    include: { response: { select: { totalScore: true, severity: true, completedAt: true } } },
+    orderBy: { createdAt: 'desc' },
+    take: 8,
+  })
+  const history = priorSessions
+    .map((s) => s.response!)
+    .filter((r) => r.completedAt < assessmentSession.response!.completedAt)
+    .reverse()
+  const historyBlock = buildHistoryBlock(history)
+
+  const result = await callAnthropic(apiKey, {
+    model: 'claude-sonnet-5',
+    max_tokens: 1024,
+    output_config: {
+      format: { type: 'json_schema', schema: OUTPUT_JSON_SCHEMA },
+    },
+    messages: [
+      {
+        role: 'user',
+        content: buildPrompt({
+          scaleName: assessmentSession.scale.name,
+          totalScore: assessmentSession.response.totalScore,
+          severity: assessmentSession.response.severity,
+          itemLines,
+          historyBlock,
+          suicidalIdeation: alerts.suicidalIdeation,
+        }),
       },
-      messages: [
-        {
-          role: 'user',
-          content: buildPrompt({
-            scaleName: assessmentSession.scale.name,
-            totalScore: assessmentSession.response.totalScore,
-            severity: assessmentSession.response.severity,
-            itemLines,
-            suicidalIdeation: alerts.suicidalIdeation,
-          }),
-        },
-      ],
-    }),
+    ],
   })
 
-  const data = await response.json()
-  if (!response.ok) {
-    return NextResponse.json(
-      { error: data.error?.message ?? 'Claude API error' },
-      { status: response.status },
-    )
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status })
   }
+  const data = result.data
 
   if (data.stop_reason === 'refusal') {
     return NextResponse.json({ error: 'The model declined to generate this summary.' }, { status: 502 })
@@ -187,6 +214,7 @@ export async function POST(req: NextRequest) {
   )?.text
   let narrative: ClinicalNarrative
   try {
+    if (!text) throw new Error('empty response')
     narrative = NarrativeSchema.parse(JSON.parse(text))
   } catch {
     return NextResponse.json({ error: 'Malformed summary from model. Try again.' }, { status: 502 })
