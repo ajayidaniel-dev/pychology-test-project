@@ -9,6 +9,7 @@ import type { ItemScoreRow } from "@/components/sessions/item-scores-section"
 const columns: ColumnDef<ItemScoreRow>[] = [
   {
     accessorKey: "label",
+    meta: { className: "whitespace-normal break-words py-3" },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Question" />
     ),
@@ -18,11 +19,14 @@ const columns: ColumnDef<ItemScoreRow>[] = [
   },
   {
     accessorKey: "score",
+    meta: { className: "w-24 align-top py-3" },
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Score" />
     ),
     cell: ({ row }) => (
-      <span className="font-medium">{row.original.score}</span>
+      <span className="font-mono font-medium tabular-nums">
+        {row.original.score}
+      </span>
     ),
   },
 ]
@@ -42,11 +46,12 @@ export function ItemScoresTable({ items }: ItemScoresTableProps) {
         row.isSafetyItem ? "bg-destructive/5 hover:bg-destructive/10" : undefined
       }
       enablePagination={items.length > 10}
+      mobileListClassName="divide-y"
       renderMobileRow={(item) => (
         <div
           className={cn(
-            "min-h-[56px] rounded-lg border bg-card p-3",
-            item.isSafetyItem && "border-destructive/40 bg-destructive/5",
+            "min-h-14 px-4 py-3",
+            item.isSafetyItem && "bg-destructive/5",
           )}
         >
           <p className="line-clamp-2 text-sm font-medium">{item.label}</p>

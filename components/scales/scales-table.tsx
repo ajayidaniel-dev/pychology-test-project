@@ -90,10 +90,11 @@ export function ScalesTable({
           (row.description?.toLowerCase().includes(query) ?? false)
         )
       }}
+      mobileListClassName="divide-y"
       renderMobileRow={(scale) => (
         <Link
           href={`/scales/${scale.id}`}
-          className="block min-h-[88px] rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-accent/50 active:bg-accent"
+          className="block min-h-22 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3">

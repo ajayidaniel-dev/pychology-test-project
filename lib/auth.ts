@@ -19,15 +19,19 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
+        const email = credentials.email.trim().toLowerCase()
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email },
         })
 
         if (!user || !user.passwordHash) return null
-        if (!user.emailVerified) throw new Error('EMAIL_NOT_VERIFIED')
 
         const valid = await verifyPassword(credentials.password, user.passwordHash)
         if (!valid) return null
+
+        // Only after the password checks out — otherwise this error would let
+        // anyone probe which emails have (unverified) accounts.
+        if (!user.emailVerified) throw new Error('EMAIL_NOT_VERIFIED')
 
         return { id: user.id, email: user.email!, name: user.name }
       },

@@ -102,10 +102,11 @@ export function PatientListTable({ patients }: PatientListTableProps) {
           (row.displayName?.toLowerCase().includes(query) ?? false)
         )
       }}
+      mobileListClassName="divide-y"
       renderMobileRow={(row) => (
         <Link
           href={`/patients/${row.id}`}
-          className="block min-h-[72px] rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-accent/50 active:bg-accent"
+          className="block min-h-18 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

@@ -1,108 +1,140 @@
-"use client"
+"use client";
 
-import { Activity, BarChart3, ShieldCheck } from "lucide-react"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { cn } from "@/lib/utils"
+import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 
 interface AuthLayoutProps {
-  children: React.ReactNode
-  className?: string
+  children: React.ReactNode;
+  className?: string;
 }
 
-const FEATURES = [
+const LEDGER = [
   {
-    icon: Activity,
     title: "Real-time clinical alerts",
     description: "Severity thresholds surface what needs attention first.",
+    datum: "<1 s to signal",
   },
   {
-    icon: BarChart3,
     title: "Longitudinal score tracking",
-    description: "PHQ-9, GAD-7, BDI-II and custom scales in one view.",
+    description: "Standard instruments and custom scales in one view.",
+    datum: "PHQ-9 · GAD-7 · BDI-II",
   },
   {
-    icon: ShieldCheck,
     title: "Clinician-first privacy",
-    description: "Anonymous patient IDs with secure, single-use assessment links.",
+    description: "Anonymous patient IDs with single-use assessment links.",
+    datum: "0 names stored",
   },
-] as const
+] as const;
 
 function AuthBrandingPanel() {
   return (
     <div className="relative hidden overflow-hidden lg:flex lg:flex-col">
-      {/* Base gradient */}
       <div className="absolute inset-0 bg-auth-panel" />
 
-      {/* Ambient glow */}
-      <div
-        className="pointer-events-none absolute -left-24 top-1/4 h-80 w-80 rounded-full bg-primary/20 blur-3xl"
+      {/*
+        Severity-trend motif: a longitudinal score line easing below a dashed
+        clinical threshold — the product's actual promise, as decoration.
+      */}
+      <svg
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-56 w-full text-sidebar-primary"
+        viewBox="0 0 640 224"
+        preserveAspectRatio="none"
+        fill="none"
         aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute bottom-0 right-0 h-64 w-64 rounded-full bg-primary/10 blur-3xl"
-        aria-hidden
-      />
+      >
+        <line
+          x1="0"
+          y1="72"
+          x2="640"
+          y2="72"
+          stroke="currentColor"
+          strokeOpacity="0.18"
+          strokeDasharray="3 8"
+          vectorEffect="non-scaling-stroke"
+        />
+        <path
+          d="M0 44 L80 68 L160 52 L240 96 L320 88 L400 128 L480 118 L560 152 L640 144 L640 224 L0 224 Z"
+          fill="currentColor"
+          fillOpacity="0.05"
+        />
+        <path
+          d="M0 44 L80 68 L160 52 L240 96 L320 88 L400 128 L480 118 L560 152 L640 144"
+          stroke="currentColor"
+          strokeOpacity="0.35"
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+        />
+        {[
+          [80, 68],
+          [240, 96],
+          [400, 128],
+          [560, 152],
+        ].map(([x, y]) => (
+          <circle
+            key={x}
+            cx={x}
+            cy={y}
+            r="3"
+            fill="var(--auth-panel)"
+            stroke="currentColor"
+            strokeOpacity="0.5"
+            strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </svg>
 
-      {/* Subtle grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
-        }}
-        aria-hidden
-      />
-
-      <div className="relative flex h-full flex-col justify-between p-10 xl:p-14">
-        {/* Brand lockup */}
-        <div className="space-y-6">
+      <div className="relative flex h-full flex-col justify-center gap-32 p-14">
+        <div className="flex flex-col gap-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25">
-              <span className="text-sm font-bold tracking-tight text-primary">A</span>
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary/15 text-[13px] font-bold text-primary ring-1 ring-inset ring-primary/25">
+              A
             </div>
-            <div>
-              <p className="text-lg font-semibold tracking-tight text-auth-panel-foreground">
+            <p className="font-mono text-xs tracking-[0.08em] text-auth-panel-muted">
+              <span className="font-semibold text-auth-panel-foreground">
                 APAS
-              </p>
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-auth-panel-muted">
-                Clinical Overwatch
-              </p>
-            </div>
-          </div>
-
-          <div className="max-w-md space-y-4">
-            <h1 className="text-3xl font-semibold leading-[1.15] tracking-tight text-auth-panel-foreground xl:text-4xl">
-              Clinical intelligence for modern psychology practice
-            </h1>
-            <p className="text-base leading-relaxed text-auth-panel-muted">
-              Monitor assessments, track severity trends, and act on alerts — without
-              leaving your workflow.
+              </span>{" "}
+              · CLINICAL OVERWATCH
             </p>
           </div>
+
+          <p className="max-w-md text-balance text-2xl font-semibold leading-tight tracking-tight text-auth-panel-foreground">
+            Clinical intelligence for modern psychology practice
+          </p>
+          <p className="max-w-md text-[15px] leading-relaxed text-auth-panel-muted">
+            Monitor assessments, track severity trends, and act on alerts —
+            without leaving your workflow.
+          </p>
         </div>
 
-        {/* Feature list */}
-        <div className="max-w-md space-y-5">
-          {FEATURES.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="flex gap-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/5 ring-1 ring-white/10">
-                <Icon className="h-4 w-4 text-primary" strokeWidth={1.75} />
+        {/* Feature ledger */}
+        <div className="flex max-w-lg flex-col">
+          {LEDGER.map(({ title, description, datum }) => (
+            <div
+              key={title}
+              className="flex items-baseline justify-between gap-4 border-t border-auth-panel-foreground/10 py-4"
+            >
+              <div>
+                <p className="text-sm font-medium text-auth-panel-foreground">
+                  {title}
+                </p>
+                <p className="mt-1 text-[13px] leading-normal text-auth-panel-muted">
+                  {description}
+                </p>
               </div>
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium text-auth-panel-foreground">{title}</p>
-                <p className="text-sm leading-relaxed text-auth-panel-muted">{description}</p>
-              </div>
+              <span className="whitespace-nowrap font-mono text-xs tracking-[0.02em] text-primary">
+                {datum}
+              </span>
             </div>
           ))}
+          <p className="border-t border-auth-panel-foreground/10 pt-4 text-xs text-auth-panel-muted">
+            Decision support for licensed clinicians. Not a substitute for
+            clinical judgment.
+          </p>
         </div>
-
-        <p className="text-xs text-auth-panel-muted/80">
-          Decision support for licensed clinicians. Not a substitute for clinical judgment.
-        </p>
       </div>
     </div>
-  )
+  );
 }
 
 export function AuthLayout({ children, className }: AuthLayoutProps) {
@@ -127,5 +159,5 @@ export function AuthLayout({ children, className }: AuthLayoutProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

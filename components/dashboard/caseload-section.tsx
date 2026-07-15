@@ -16,12 +16,15 @@ export interface CaseloadPatient {
   latestScore: number | null
   sessionCount: number
   severity: SeverityLevel | null
+  delta: number | null
+  scoreHistory: number[]
+  lastAssessedAt: Date | null
 }
 
 export function CaseloadSection({ patients }: { patients: CaseloadPatient[] }) {
   return (
     <section className="space-y-3">
-      <Card className="overflow-hidden py-0 shadow-sm">
+      <Card className="gap-0 overflow-hidden py-0 shadow-sm">
         <CardHeader className="border-b px-4 py-4 md:px-6">
           <SectionHeader
             title="Caseload"
@@ -32,6 +35,7 @@ export function CaseloadSection({ patients }: { patients: CaseloadPatient[] }) {
         {patients.length === 0 ? (
           <CardContent className="p-4 md:p-6">
             <EmptyState
+              plain
               icon={<Users className="size-5" />}
               title="No patients yet"
               description="Add your first patient to start sending assessment links and tracking scores."

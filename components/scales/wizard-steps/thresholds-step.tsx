@@ -49,7 +49,7 @@ export function ThresholdsStep({
           {thresholds.map((th, i) => (
             <div
               key={i}
-              className="rounded-lg border bg-card p-3 md:grid md:grid-cols-[1fr_80px_80px_auto] md:items-center md:gap-2 md:border-0 md:p-0"
+              className="rounded-lg bg-muted/40 p-3 md:grid md:grid-cols-[1fr_80px_80px_auto] md:items-center md:gap-2 md:bg-transparent md:p-0"
             >
               <div className="space-y-2 md:contents">
                 <div className="space-y-1 md:space-y-0">

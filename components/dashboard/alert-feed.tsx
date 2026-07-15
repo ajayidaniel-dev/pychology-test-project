@@ -1,11 +1,12 @@
 import Link from "next/link"
+import { formatDistanceToNowStrict } from "date-fns"
 import { AlertTriangle, Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { SeverityBadge } from "@/components/ui/severity-badge"
 import { EmptyState } from "@/components/layout/empty-state"
-import { computeAlerts } from "@/lib/alert-rules"
+import { computeAlerts, getScaleMeta, getThresholdCrossed } from "@/lib/alert-rules"
+import { cn } from "@/lib/utils"
 import type { SeverityLevel } from "@/components/ui/severity-badge"
 
 interface SessionWithPatient {
@@ -15,7 +16,8 @@ interface SessionWithPatient {
   patientId: string
   patient: { anonymousId: string }
   storedSeverity?: string | null
-  response: { totalScore: number; itemScores: Record<string, number> } | null
+  completedAt?: Date | null
+  response: { totalScore: number; itemScores: unknown } | null
 }
 
 function toSeverityLevel(severity: string | null): SeverityLevel {
@@ -23,18 +25,6 @@ function toSeverityLevel(severity: string | null): SeverityLevel {
     return severity
   }
   return "low"
-}
-
-function SiAlert() {
-  return (
-    <Alert variant="destructive" className="py-2">
-      <AlertTriangle />
-      <AlertTitle className="text-xs">Suicidal ideation endorsed</AlertTitle>
-      <AlertDescription className="text-xs">
-        Immediate clinical attention required.
-      </AlertDescription>
-    </Alert>
-  )
 }
 
 export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
@@ -48,12 +38,22 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
         itemScores,
         s.storedSeverity ?? undefined,
       )
-      return { session: s, ...result }
+      return {
+        session: s,
+        ...result,
+        maxScore: getScaleMeta(s.scale)?.maxScore ?? null,
+        threshold: getThresholdCrossed(s.scale, result.severity),
+      }
     })
     .filter((a) => a.severity !== null)
     .sort((a, b) => {
       const order = { critical: 0, high: 1, moderate: 2 }
-      return order[a.severity!] - order[b.severity!]
+      const rank = order[a.severity!] - order[b.severity!]
+      if (rank !== 0) return rank
+      return (
+        (b.session.completedAt?.getTime() ?? 0) -
+        (a.session.completedAt?.getTime() ?? 0)
+      )
     })
 
   if (alerts.length === 0) {
@@ -66,34 +66,75 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
     )
   }
 
+  const hasCritical = alerts.some((a) => a.severity === "critical")
+
   return (
-    <Card id="alerts" className="scroll-mt-20 overflow-hidden py-0 shadow-sm">
+    <Card
+      id="alerts"
+      className={cn(
+        "scroll-mt-20 gap-0 overflow-hidden py-0 shadow-sm",
+        hasCritical && "border-severity-critical/30",
+      )}
+    >
       <CardHeader className="border-b px-4 py-4 md:px-6">
-        <CardTitle className="text-base font-semibold">Open Alerts</CardTitle>
+        <CardTitle className="flex items-baseline gap-2 text-base font-semibold">
+          Alert queue
+          <span className="font-mono text-xs font-normal text-muted-foreground">
+            {alerts.length}
+          </span>
+        </CardTitle>
       </CardHeader>
 
-      {/* Desktop list */}
-      <div className="hidden divide-y md:block">
-        {alerts.map(({ session, severity, suicidalIdeation }) => (
+      {/* One divided list on every viewport; rows stack below md */}
+      <div className="divide-y">
+        {alerts.map(({ session, severity, suicidalIdeation, maxScore, threshold }) => (
           <div
             key={session.id}
-            className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-4 md:px-6"
+            className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:gap-4 md:px-6"
           >
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3 md:gap-4">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1.5">
               <SeverityBadge severity={toSeverityLevel(severity)} />
               <span className="min-w-16 text-sm font-medium">
                 {session.patient.anonymousId}
               </span>
               <span className="text-sm text-muted-foreground">
-                {session.scaleName} · Score {session.response?.totalScore}
+                {session.scaleName}
               </span>
+              <span className="font-mono text-sm tabular-nums">
+                {session.response?.totalScore}
+                {maxScore !== null && (
+                  <span className="text-muted-foreground"> / {maxScore}</span>
+                )}
+              </span>
+              {threshold !== null && (
+                <span className="text-xs text-muted-foreground">
+                  crossed {severity} at{" "}
+                  <span className="font-mono tabular-nums">≥ {threshold}</span>
+                </span>
+              )}
+              {session.completedAt && (
+                <time
+                  dateTime={session.completedAt.toISOString()}
+                  className="text-xs text-muted-foreground"
+                >
+                  {formatDistanceToNowStrict(session.completedAt, {
+                    addSuffix: true,
+                  })}
+                </time>
+              )}
+              {suicidalIdeation && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-severity-critical">
+                  <AlertTriangle aria-hidden className="size-3.5" />
+                  Suicidal ideation endorsed — immediate attention required
+                </span>
+              )}
             </div>
-            {suicidalIdeation && (
-              <div className="w-full md:max-w-xs md:shrink-0">
-                <SiAlert />
-              </div>
-            )}
-            <Button variant="outline" size="sm" className="shrink-0" asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full shrink-0 md:w-auto"
+              asChild
+            >
               <Link href={`/patients/${session.patientId}/sessions/${session.id}`}>
                 Review
               </Link>
@@ -101,36 +142,6 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
           </div>
         ))}
       </div>
-
-      {/* Mobile card stack */}
-      <CardContent className="space-y-3 p-4 md:hidden">
-        {alerts.map(({ session, severity, suicidalIdeation }) => (
-          <div
-            key={session.id}
-            className="rounded-lg border bg-card p-4 shadow-sm"
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <SeverityBadge severity={toSeverityLevel(severity)} />
-              <span className="text-sm font-semibold">
-                {session.patient.anonymousId}
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {session.scaleName} · Score {session.response?.totalScore}
-            </p>
-            {suicidalIdeation && (
-              <div className="mt-3">
-                <SiAlert />
-              </div>
-            )}
-            <Button variant="outline" size="sm" className="mt-3 w-full" asChild>
-              <Link href={`/patients/${session.patientId}/sessions/${session.id}`}>
-                Review assessment
-              </Link>
-            </Button>
-          </div>
-        ))}
-      </CardContent>
     </Card>
   )
 }

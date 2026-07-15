@@ -29,6 +29,7 @@ export interface PatientWithSessions {
       totalScore: number
       itemScores: unknown
       severity: string | null
+      completedAt?: Date | null
     } | null
     scale?: { name: string } | null
   }>
@@ -43,6 +44,11 @@ export interface PatientListItem {
   latestScaleName: string | null
   severity: SeverityLevel | null
   createdAt: Date
+  /** Change vs. the previous assessment on the same scale; null when there is no prior score. */
+  delta: number | null
+  /** Total scores on the latest scale, oldest → newest (same-scale so points are comparable). */
+  scoreHistory: number[]
+  lastAssessedAt: Date | null
 }
 
 export function shapePatientListItem(patient: PatientWithSessions): PatientListItem {
@@ -62,6 +68,14 @@ export function shapePatientListItem(patient: PatientWithSessions): PatientListI
     severity = toSeverityLevel(result.severity)
   }
 
+  // Delta and trend compare like with like: only scores on the latest scale.
+  const sameScale = latest?.scale
+    ? completed.filter((s) => s.scale?.name === latest.scale!.name)
+    : []
+  const scoreHistory = sameScale.map((s) => s.response!.totalScore)
+  const previousScore =
+    scoreHistory.length >= 2 ? scoreHistory[scoreHistory.length - 2] : null
+
   return {
     id: patient.id,
     anonymousId: patient.anonymousId,
@@ -71,6 +85,12 @@ export function shapePatientListItem(patient: PatientWithSessions): PatientListI
     latestScaleName: latest?.scale?.name ?? null,
     severity,
     createdAt: patient.createdAt,
+    delta:
+      previousScore !== null && latest?.response
+        ? latest.response.totalScore - previousScore
+        : null,
+    scoreHistory,
+    lastAssessedAt: latest?.response?.completedAt ?? null,
   }
 }
 
@@ -85,7 +105,15 @@ export function toCaseloadPatient(
   item: PatientListItem,
 ): Pick<
   PatientListItem,
-  "id" | "anonymousId" | "latestScaleName" | "latestScore" | "sessionCount" | "severity"
+  | "id"
+  | "anonymousId"
+  | "latestScaleName"
+  | "latestScore"
+  | "sessionCount"
+  | "severity"
+  | "delta"
+  | "scoreHistory"
+  | "lastAssessedAt"
 > {
   return {
     id: item.id,
@@ -94,5 +122,26 @@ export function toCaseloadPatient(
     latestScore: item.latestScore,
     sessionCount: item.sessionCount,
     severity: item.severity,
+    delta: item.delta,
+    scoreHistory: item.scoreHistory,
+    lastAssessedAt: item.lastAssessedAt,
   }
+}
+
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  moderate: 2,
+  low: 3,
+}
+
+/** Severity-first ordering so the top row answers "who needs attention now". */
+export function bySeverityThenRecency(
+  a: Pick<PatientListItem, "severity" | "lastAssessedAt">,
+  b: Pick<PatientListItem, "severity" | "lastAssessedAt">,
+): number {
+  const rankA = a.severity ? SEVERITY_RANK[a.severity] ?? 4 : 4
+  const rankB = b.severity ? SEVERITY_RANK[b.severity] ?? 4 : 4
+  if (rankA !== rankB) return rankA - rankB
+  return (b.lastAssessedAt?.getTime() ?? 0) - (a.lastAssessedAt?.getTime() ?? 0)
 }

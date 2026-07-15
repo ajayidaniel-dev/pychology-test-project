@@ -35,6 +35,8 @@ export interface TanStackDataTableProps<T> {
   getRowHref?: (row: T) => string | null
   isRowClickable?: (row: T) => boolean
   renderMobileRow?: (row: T) => React.ReactNode
+  /** Overrides the mobile list wrapper (default "space-y-3 p-4"), e.g. "divide-y" for flat rows inside a Card. */
+  mobileListClassName?: string
   getRowClassName?: (row: T) => string | undefined
   enablePagination?: boolean
   enableSorting?: boolean
@@ -54,6 +56,7 @@ export function TanStackDataTable<T>({
   getRowHref,
   isRowClickable,
   renderMobileRow,
+  mobileListClassName,
   getRowClassName,
   enablePagination = true,
   enableSorting = true,
@@ -127,7 +130,7 @@ export function TanStackDataTable<T>({
       )}
 
       {isMobile && renderMobileRow ? (
-        <div className="space-y-3 p-4">
+        <div className={mobileListClassName ?? "space-y-3 p-4"}>
           {rows.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
               No results.
@@ -140,11 +143,11 @@ export function TanStackDataTable<T>({
         </div>
       ) : (
         <Table className="table-fixed">
-          <TableHeader className="bg-muted/50">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="border-b-0 hover:bg-muted/50"
+                className="border-b-0 bg-muted/50 hover:bg-muted/50"
               >
                 {headerGroup.headers.map((header) => (
                   <TableHead
@@ -152,6 +155,8 @@ export function TanStackDataTable<T>({
                     className={cn(
                       "h-11 px-4 text-muted-foreground first:pl-6 last:pr-6",
                       header.column.id === "actions" && "w-12 px-2",
+                      (header.column.columnDef.meta as { className?: string } | undefined)
+                        ?.className,
                     )}
                   >
                     {header.isPlaceholder
@@ -210,6 +215,8 @@ export function TanStackDataTable<T>({
                         className={cn(
                           "px-4 first:pl-6 last:pr-6",
                           cell.column.id === "actions" && "relative z-20 w-12 px-2",
+                          (cell.column.columnDef.meta as { className?: string } | undefined)
+                            ?.className,
                         )}
                         onClick={(event) => {
                           if (cell.column.id === "actions") {

@@ -53,8 +53,9 @@ export function ScaleThresholdsTable({
       shell={false}
       enablePagination={false}
       isRowClickable={() => false}
+      mobileListClassName="divide-y"
       renderMobileRow={(threshold) => (
-        <div className="rounded-lg border bg-card p-3">
+        <div className="px-4 py-3">
           <p className="font-medium">{threshold.label}</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Score range: {threshold.minScore} – {threshold.maxScore}

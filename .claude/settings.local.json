@@ -15,7 +15,95 @@
       "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":1}}')",
       "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":\"two\",\"2\":1,\"3\":1,\"4\":1,\"5\":1,\"6\":1,\"7\":1,\"8\":1,\"9\":0}}')",
       "Bash(curl -s -w ' [%{http_code}]' -X POST http://localhost:3000/api/fill/ef0a1818-b5d2-4215-bb1a-b6c2a7941900 -H 'Content-Type: application/json' -d '{\"itemScores\":{\"1\":2,\"2\":1,\"3\":3,\"4\":2,\"5\":1,\"6\":0,\"7\":1,\"8\":0,\"9\":0}}')",
-      "Bash(curl -s http://localhost:3000/patients/cmrkjerox00016xfafb62bggh/sessions/cmrkjes9800036xfaxmngyktc/report)"
+      "Bash(curl -s http://localhost:3000/patients/cmrkjerox00016xfafb62bggh/sessions/cmrkjes9800036xfaxmngyktc/report)",
+      "Skill(impeccable)",
+      "Skill(impeccable:*)",
+      "Bash(node /Users/hh/Documents/psychology-test/.claude/skills/impeccable/scripts/context.mjs)",
+      "Bash(node /Users/hh/Documents/psychology-test/.claude/skills/impeccable/scripts/critique-storage.mjs slug \"app/auth/signin/page.tsx\")",
+      "Bash(node .claude/skills/impeccable/scripts/detect.mjs --json app/auth components/auth components/layout/auth-layout.tsx)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(IMPECCABLE_CRITIQUE_META='{\"target\":\"the login page\",\"total_score\":23,\"p0_count\":1,\"p1_count\":2}' node .claude/skills/impeccable/scripts/critique-storage.mjs write app-auth-signin-page-tsx /private/tmp/claude-501/-Users-hh-Documents-psychology-test/52fedf6d-84ad-4d07-86df-7606d68885aa/scratchpad/critique-body.md)",
+      "Bash(node .claude/skills/impeccable/scripts/critique-storage.mjs trend app-auth-signin-page-tsx 5)",
+      "Bash(yarn test *)",
+      "Bash(yarn build *)",
+      "Bash(ls ~/.nvm/versions/node 2>/dev/null; which -a node | head; ls /opt/homebrew/opt/node*/bin/node 2>/dev/null)",
+      "Bash(node .claude/skills/impeccable/scripts/live.mjs)",
+      "Bash(node .claude/skills/impeccable/scripts/detect-csp.mjs)",
+      "Bash(node .claude/skills/impeccable/scripts/live-poll.mjs)",
+      "Bash(python3 -)",
+      "Bash(node .claude/skills/impeccable/scripts/detect.mjs .)",
+      "Bash(node .claude/skills/impeccable/scripts/detect.mjs app components)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 3 http://localhost:3000)",
+      "Bash(node .claude/skills/impeccable/scripts/detect.mjs http://localhost:3000)",
+      "Bash(npm install *)",
+      "Bash(tail -25 /Users/hh/.npm/_logs/2026-07-15T10_24_11_821Z-debug-0.log)",
+      "Read(//Users/hh/.npm/_logs/**)",
+      "Bash(rm -rf \"/Users/hh/.cache/puppeteer/chrome-headless-shell/mac-150.0.7871.24\")",
+      "Bash(grep -E \"error \\(Error|ERROR|\\\\[cause\\\\]|.*All providers\\)\" -m 6 /Users/hh/.npm/_logs/2026-07-15T10_24_41_056Z-debug-0.log | head -8)",
+      "Bash(grep -A6 \"All providers failed for chrome \" /Users/hh/.npm/_logs/2026-07-15T10_24_41_056Z-debug-0.log | head -10; ls /Users/hh/.cache/puppeteer/chrome/ 2>/dev/null)",
+      "Read(//Users/hh/.cache/puppeteer/chrome/**)",
+      "Bash(rm -rf \"/Users/hh/.cache/puppeteer/chrome/mac-150.0.7871.24\")",
+      "Bash(node -e \"import\\('puppeteer'\\).then\\(p=>console.log\\('puppeteer ok'\\)\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{time_total}s %{url_effective} -> redirect:%{redirect_url}\\\\n\" --max-time 30 http://localhost:3000)",
+      "Bash(node /private/tmp/claude-501/-Users-hh-Documents-psychology-test/e2dfff57-5a50-42dd-ba29-5c2fd16d2b59/scratchpad/scan.mjs http://localhost:3000/auth/signin)",
+      "Bash(node /Users/hh/Documents/psychology-test/.impeccable/mkuser.tmp.cjs)",
+      "Bash(sed -i '' \"s|import puppeteer from '.*';|import puppeteer from 'puppeteer';|\" /private/tmp/claude-501/-Users-hh-Documents-psychology-test/e2dfff57-5a50-42dd-ba29-5c2fd16d2b59/scratchpad/scan-auth.mjs)",
+      "Bash(node /private/tmp/claude-501/-Users-hh-Documents-psychology-test/e2dfff57-5a50-42dd-ba29-5c2fd16d2b59/scratchpad/scan-auth.mjs)",
+      "Bash(node /Users/hh/Documents/psychology-test/.impeccable/scan-auth.tmp.mjs)",
+      "Bash(node /Users/hh/Documents/psychology-test/.impeccable/scan-auth.tmp.mjs http://localhost:3000/dashboard http://localhost:3000/patients http://localhost:3000/scales)",
+      "Bash(sed -i '' \"s|for \\(const url of \\\\['http://localhost:3000/dashboard', 'http://localhost:3000/patients', 'http://localhost:3000/scales'\\\\]\\)|for \\(const url of ['http://localhost:3000/scales']\\)|\" /Users/hh/Documents/psychology-test/.impeccable/scan-nested.tmp.mjs)",
+      "Bash(node /Users/hh/Documents/psychology-test/.impeccable/scan-nested.tmp.mjs)",
+      "Bash(node /Users/hh/Documents/psychology-test/.impeccable/scan-real.tmp.mjs http://localhost:3000/dashboard http://localhost:3000/patients http://localhost:3000/scales)",
+      "Bash(node /Users/hh/Documents/psychology-test/.impeccable/find-layout-transitions.tmp.mjs)",
+      "Bash(node .claude/skills/impeccable/scripts/live-status.mjs)",
+      "Bash(ps -p 55905 -o pid,command=)",
+      "Bash(curl -s --max-time 2 http://localhost:8400 -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(node .claude/skills/impeccable/scripts/live-complete.mjs --help)",
+      "Bash(node .claude/skills/impeccable/scripts/live-wrap.mjs --help)",
+      "Bash(node .claude/skills/impeccable/scripts/live-inject.mjs --help)",
+      "Bash(node .claude/skills/impeccable/scripts/live-inject.mjs --remove)",
+      "Bash(kill 55905)",
+      "Bash(ps -p 55905 -o pid=)",
+      "Skill(dataviz)",
+      "Skill(dataviz:*)",
+      "Bash(OUT_DIR=/private/tmp/claude-501/-Users-hh-Documents-psychology-test/e2dfff57-5a50-42dd-ba29-5c2fd16d2b59/scratchpad node /Users/hh/Documents/psychology-test/.impeccable/shot.tmp.mjs)",
+      "Bash(npm run *)",
+      "Bash(rm -f /Users/hh/Documents/psychology-test/.impeccable/*.tmp.mjs /Users/hh/Documents/psychology-test/.impeccable/*.tmp.cjs && git status --short | head -25)",
+      "Bash(/Users/hh/.nvm/versions/node/v22.19.0/bin/node .claude/skills/impeccable/scripts/live-poll.mjs)",
+      "Bash(curl -sI http://localhost:3000/dashboard)",
+      "Bash(curl -s http://localhost:3000/auth/signin -o /dev/null -D -)",
+      "Bash(curl -s http://localhost:3000/auth/signin)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"http://localhost:3000/_next/static/css/app/layout.css?v=1784114201956\")",
+      "Bash(curl -s \"http://localhost:3000/_next/static/css/app/layout.css\")",
+      "Bash(grep -o 'Error[^<]*\\\\|error[^<]\\\\{0,120\\\\}')",
+      "Bash(kill 55916)",
+      "Bash(kill -9 55916 55917)",
+      "Bash(lsof -tnP -iTCP:3000 -sTCP:LISTEN)",
+      "Bash(node .claude/skills/impeccable/scripts/live-wrap.mjs --id edd9f89f --count 3 --classes \"fixed,inset-y-0,z-10,hidden,h-svh,md:flex\" --tag \"div\" --text \"AAPASClinical OverwatchDashboardPatientsScalesSettings\")",
+      "Bash(node .claude/skills/impeccable/scripts/live-wrap.mjs --id edd9f89f --count 3 --file components/ui/sidebar.tsx --classes \"fixed,inset-y-0,z-10,hidden,h-svh,md:flex\" --tag \"div\")",
+      "Bash(/Users/hh/.nvm/versions/node/v22.19.0/bin/node .claude/skills/impeccable/scripts/live-poll.mjs --reply edd9f89f done --file components/ui/sidebar.tsx)",
+      "Bash(/Users/hh/.nvm/versions/node/v22.19.0/bin/node .claude/skills/impeccable/scripts/live-complete.mjs --id edd9f89f)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 30 http://localhost:3000/dashboard)",
+      "Bash(rm -f /Users/hh/Documents/psychology-test/.impeccable/*.tmp.cjs /Users/hh/Documents/psychology-test/.impeccable/*.tmp.mjs)"
+    ],
+    "additionalDirectories": [
+      "/Users/hh/Documents/psychology-test/.impeccable"
     ]
-  }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/skills/impeccable/scripts/hook.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Checking UI changes"
+          }
+        ]
+      }
+    ]
+  },
+  "description": "Impeccable design detector: runs after Edit/Write/MultiEdit on UI files and surfaces findings as system reminders."
 }

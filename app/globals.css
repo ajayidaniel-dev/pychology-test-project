@@ -142,6 +142,33 @@
   }
 }
 
+/* Sidebar nav hierarchy: inactive routes recede, the active route reads at a
+   glance (dimmed ink lifts on hover/focus; active row slightly raised with an
+   Overwatch Blue icon). Accepted via impeccable live, session edd9f89f. */
+@layer components {
+  [data-slot='sidebar-content'] a[data-sidebar='menu-button'][data-active='false'] {
+    color: color-mix(in oklch, var(--sidebar-foreground), transparent 40%);
+    transition:
+      color 150ms cubic-bezier(0.25, 1, 0.5, 1),
+      background-color 150ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  [data-slot='sidebar-content'] a[data-sidebar='menu-button'][data-active='false']:hover,
+  [data-slot='sidebar-content'] a[data-sidebar='menu-button'][data-active='false']:focus-visible {
+    color: var(--sidebar-foreground);
+  }
+  [data-slot='sidebar-content'] a[data-sidebar='menu-button'][data-active='true'] {
+    background: color-mix(in oklch, var(--sidebar-accent), white 4%);
+  }
+  [data-slot='sidebar-content'] a[data-sidebar='menu-button'][data-active='true'] svg {
+    color: color-mix(in oklch, var(--sidebar-primary), white 25%);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-slot='sidebar-content'] a[data-sidebar='menu-button'] {
+      transition-duration: 0.01ms;
+    }
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;

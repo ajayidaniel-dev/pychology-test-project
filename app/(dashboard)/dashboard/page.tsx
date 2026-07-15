@@ -5,15 +5,18 @@ import { redirect } from "next/navigation"
 export const metadata: Metadata = {
   title: "Dashboard",
 }
-import { AlertTriangle } from "lucide-react"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
-import { StatCards } from "@/components/dashboard/stat-cards"
+import { StatusBand } from "@/components/dashboard/status-band"
 import { AlertFeed } from "@/components/dashboard/alert-feed"
 import { CaseloadSection } from "@/components/dashboard/caseload-section"
 import { PageHeader } from "@/components/layout/page-header"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { shapePatientList, toCaseloadPatient, scaleNameToEnum } from "@/lib/patient-summary"
+import {
+  shapePatientList,
+  toCaseloadPatient,
+  bySeverityThenRecency,
+  scaleNameToEnum,
+} from "@/lib/patient-summary"
 import { computeAlerts } from "@/lib/alert-rules"
 
 export default async function DashboardPage() {
@@ -42,7 +45,23 @@ export default async function DashboardPage() {
   )
   const pendingSessions = allSessions.filter((s) => s.status === "PENDING").length
 
-  const alertFeedSessions = completedSessions.map((s) => ({
+  // Alerts reflect current state: only the latest completed assessment per
+  // patient + scale. Superseded results belong on the patient page, not here.
+  const latestByPatientScale = new Map<string, (typeof completedSessions)[number]>()
+  for (const s of completedSessions) {
+    const key = `${s.patientId}:${s.scaleId}`
+    const prev = latestByPatientScale.get(key)
+    if (
+      !prev ||
+      (s.response!.completedAt?.getTime() ?? 0) >
+        (prev.response!.completedAt?.getTime() ?? 0)
+    ) {
+      latestByPatientScale.set(key, s)
+    }
+  }
+  const currentSessions = [...latestByPatientScale.values()]
+
+  const alertFeedSessions = currentSessions.map((s) => ({
     id: s.id,
     patientId: s.patientId,
     patient: s.patient,
@@ -50,9 +69,10 @@ export default async function DashboardPage() {
     scaleName: s.scale.name,
     response: s.response,
     storedSeverity: s.response?.severity,
+    completedAt: s.response?.completedAt ?? null,
   }))
 
-  const alertCounts = completedSessions.reduce(
+  const alertCounts = currentSessions.reduce(
     (acc, s) => {
       const itemScores = s.response!.itemScores as Record<string, number>
       const scaleEnum = scaleNameToEnum(s.scale.name)
@@ -69,7 +89,9 @@ export default async function DashboardPage() {
     { open: 0, critical: 0 },
   )
 
-  const caseloadPatients = shapePatientList(patients).map(toCaseloadPatient)
+  const caseloadPatients = shapePatientList(patients)
+    .map(toCaseloadPatient)
+    .sort(bySeverityThenRecency)
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,21 +101,7 @@ export default async function DashboardPage() {
         hideTitleOnMobile
       />
 
-      {alertCounts.critical > 0 && (
-        <Alert variant="destructive">
-          <AlertTriangle />
-          <AlertTitle>
-            {alertCounts.critical} critical alert
-            {alertCounts.critical !== 1 ? "s" : ""} require attention
-          </AlertTitle>
-          <AlertDescription>
-            Review flagged assessments below. Suicidal ideation endorsements take
-            priority.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <StatCards
+      <StatusBand
         stats={{
           totalPatients: patients.length,
           openAlerts: alertCounts.open,

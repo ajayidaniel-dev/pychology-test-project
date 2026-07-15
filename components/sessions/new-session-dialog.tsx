@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
   Select,
@@ -111,14 +112,19 @@ export function NewSessionDialog({ patientId }: { patientId: string }) {
             <p className="text-sm text-muted-foreground">
               Copy and send to the patient. Expires in 72 hours, single use.
             </p>
-            <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
-              <span className="flex-1 truncate text-xs text-muted-foreground">
-                {fillUrl}
-              </span>
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={fillUrl}
+                aria-label="Assessment link"
+                className="min-w-0 flex-1 font-mono text-xs"
+                onFocus={(e) => e.currentTarget.select()}
+              />
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
-                className="size-8 shrink-0"
+                className="shrink-0"
+                aria-label={copied ? "Link copied" : "Copy link"}
                 onClick={onCopy}
               >
                 {copied ? (

@@ -33,6 +33,7 @@ export function PatientSessionsSection({
       {sessions.length === 0 ? (
         <CardContent className="p-4 md:p-6">
           <EmptyState
+            plain
             title="No sessions yet"
             description='Click "New Session" to create an assessment and send a questionnaire link.'
           />

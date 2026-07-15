@@ -10,7 +10,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-export function CopyLinkButton({ token }: { token: string }) {
+export function CopyLinkButton({
+  token,
+  iconOnly = false,
+}: {
+  token: string
+  /** Icon-only variant for narrow table action cells. */
+  iconOnly?: boolean
+}) {
   const [copied, setCopied] = useState(false)
 
   function copy() {
@@ -28,17 +35,22 @@ export function CopyLinkButton({ token }: { token: string }) {
           variant="ghost"
           size="sm"
           onClick={copy}
-          className="relative z-20 h-8 gap-1 px-2 text-xs"
+          aria-label={copied ? "Link copied" : "Copy questionnaire link"}
+          className={
+            iconOnly
+              ? "relative z-20 size-8 p-0"
+              : "relative z-20 h-8 gap-1 px-2 text-xs"
+          }
         >
           {copied ? (
             <>
               <Check className="size-3.5" />
-              Copied
+              {!iconOnly && "Copied"}
             </>
           ) : (
             <>
               <Copy className="size-3.5" />
-              Copy link
+              {!iconOnly && "Copy link"}
             </>
           )}
         </Button>

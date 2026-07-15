@@ -97,7 +97,7 @@ function buildColumns(patientId: string): ColumnDef<PatientSessionRow>[] {
           return <ChevronRight className="size-4 text-muted-foreground" />
         }
         if (session.status === "PENDING") {
-          return <CopyLinkButton token={session.token} />
+          return <CopyLinkButton token={session.token} iconOnly />
         }
         return null
       },
@@ -131,8 +131,9 @@ export function PatientSessionsTable({
       getRowHref={(row) =>
         `/patients/${patientId}/sessions/${row.id}`
       }
+      mobileListClassName="divide-y"
       renderMobileRow={(session) => (
-        <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <div className="px-4 py-3">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="font-medium">{session.scaleName}</p>

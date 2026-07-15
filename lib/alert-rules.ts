@@ -42,6 +42,31 @@ function getSeverity(scale: string, score: number): AlertSeverity {
   return null
 }
 
+export interface ScaleMeta {
+  maxScore: number
+  /** Minimum score for each severity band. */
+  thresholds: { critical: number; high: number; moderate: number }
+}
+
+const SCALE_META: Record<KnownScale, ScaleMeta> = {
+  PHQ9: { maxScore: 27, thresholds: { critical: 20, high: 15, moderate: 10 } },
+  BDI2: { maxScore: 63, thresholds: { critical: 29, high: 20, moderate: 14 } },
+  GAD7: { maxScore: 21, thresholds: { critical: 15, high: 10, moderate: 5 } },
+}
+
+export function getScaleMeta(scale: string): ScaleMeta | null {
+  return SCALE_META[scale as KnownScale] ?? null
+}
+
+/** The threshold the given severity band starts at, when the scale is known. */
+export function getThresholdCrossed(
+  scale: string,
+  severity: AlertSeverity,
+): number | null {
+  if (!severity) return null
+  return SCALE_META[scale as KnownScale]?.thresholds[severity] ?? null
+}
+
 function normaliseStoredSeverity(s?: string): AlertSeverity {
   if (!s) return null
   const lower = s.toLowerCase()
