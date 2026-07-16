@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { CheckCircle2 } from "lucide-react"
+import { FillShell } from "@/components/questionnaire/fill-shell"
 import {
   Card,
   CardContent,
@@ -21,7 +22,8 @@ const NEXT_STEPS = [
 
 export default function CompletePage() {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center py-8">
+    <FillShell>
+      <div className="flex min-h-[60vh] items-center justify-center py-8">
       <Card className="w-full border shadow-sm">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10">
@@ -48,6 +50,7 @@ export default function CompletePage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </FillShell>
   )
 }

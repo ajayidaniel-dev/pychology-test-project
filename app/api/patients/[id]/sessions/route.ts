@@ -7,6 +7,7 @@ import { generateToken, tokenExpiresAt } from '@/lib/token'
 
 const CreateSessionSchema = z.object({
   scaleId: z.string().min(1),
+  collectDetails: z.boolean().optional().default(false),
 })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       patientId: params.id,
       psychologistId: session.user.id,
       scaleId: parsed.data.scaleId,
+      collectDetails: parsed.data.collectDetails,
       token,
       tokenExpiresAt: tokenExpiresAt(),
     },

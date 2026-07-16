@@ -1,7 +1,8 @@
 import prisma from "@/lib/prisma"
 import { isTokenExpired } from "@/lib/token"
 import { scaleNameToEnum } from "@/lib/patient-summary"
-import { QuestionnaireForm } from "@/components/questionnaire/questionnaire-form"
+import { FillFlow } from "@/components/questionnaire/fill-flow"
+import { FillShell } from "@/components/questionnaire/fill-shell"
 import { InvalidLinkCard } from "@/components/questionnaire/invalid-link-card"
 
 export default async function FillPage({
@@ -20,6 +21,8 @@ export default async function FillPage({
           },
         },
       },
+      patient: { select: { fullName: true, email: true } },
+      psychologist: { select: { name: true } },
     },
   })
 
@@ -28,18 +31,30 @@ export default async function FillPage({
     session.status !== "PENDING" ||
     isTokenExpired(session.tokenExpiresAt)
   ) {
-    return <InvalidLinkCard />
+    return (
+      <FillShell>
+        <InvalidLinkCard />
+      </FillShell>
+    )
   }
 
   const scaleKey = scaleNameToEnum(session.scale.name)
+  const clinicianName = session.psychologist.name ?? null
+  const patientHasDetails = Boolean(
+    session.patient.fullName && session.patient.email,
+  )
 
   return (
-    <QuestionnaireForm
-      scale={scaleKey}
-      scaleName={session.scale.name}
-      token={params.token}
-      description={session.scale.description}
-      dbItems={session.scale.items}
-    />
+    <FillShell clinicianName={clinicianName}>
+      <FillFlow
+        scale={scaleKey}
+        scaleName={session.scale.name}
+        token={params.token}
+        description={session.scale.description}
+        dbItems={session.scale.items}
+        clinicianName={clinicianName}
+        collectDetails={session.collectDetails && !patientHasDetails}
+      />
+    </FillShell>
   )
 }

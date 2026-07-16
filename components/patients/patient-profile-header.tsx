@@ -14,6 +14,7 @@ import type { SeverityLevel } from "@/components/ui/severity-badge"
 interface PatientProfileHeaderProps {
   anonymousId: string
   displayName: string | null
+  fullName?: string | null
   completedCount: number
   severity: SeverityLevel | null
   actions: React.ReactNode
@@ -22,12 +23,13 @@ interface PatientProfileHeaderProps {
 export function PatientProfileHeader({
   anonymousId,
   displayName,
+  fullName,
   completedCount,
   severity,
   actions,
 }: PatientProfileHeaderProps) {
   const description = [
-    displayName,
+    fullName ?? displayName,
     `${completedCount} completed session${completedCount !== 1 ? "s" : ""}`,
   ]
     .filter(Boolean)

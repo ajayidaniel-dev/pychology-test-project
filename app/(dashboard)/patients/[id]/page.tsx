@@ -10,7 +10,9 @@ import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { computeChartTrend, TREND_LABELS } from "@/lib/chart-trend"
 import { PatientActions } from "@/components/patients/patient-actions"
+import { PatientDetailsCard } from "@/components/patients/patient-details-card"
 import { PatientProfileHeader } from "@/components/patients/patient-profile-header"
+import type { IntakeAnswers } from "@/lib/consent"
 import { PatientSessionsSection } from "@/components/patients/patient-sessions-section"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -106,6 +108,16 @@ export default async function PatientProfilePage({
     ? toSeverityLevel(latestAlerts.severity)
     : null
 
+  const latestConsented = [...patient.assessmentSessions]
+    .reverse()
+    .find((s) => s.consentAt)
+  const latestIntake =
+    ([...completed]
+      .reverse()
+      .find((s) => s.response?.intakeAnswers)?.response
+      ?.intakeAnswers as IntakeAnswers | null) ?? null
+  const patientHasDetails = Boolean(patient.fullName && patient.email)
+
   const sessionRows = patient.assessmentSessions.map((s, i) => ({
     id: s.id,
     index: i + 1,
@@ -121,11 +133,15 @@ export default async function PatientProfilePage({
       <PatientProfileHeader
         anonymousId={patient.anonymousId}
         displayName={patient.displayName}
+        fullName={patient.fullName}
         completedCount={completed.length}
         severity={headerSeverity}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <NewSessionDialog patientId={patient.id} />
+            <NewSessionDialog
+              patientId={patient.id}
+              patientHasDetails={patientHasDetails}
+            />
             <PatientActions
               patientId={patient.id}
               currentDisplayName={patient.displayName ?? patient.anonymousId}
@@ -166,6 +182,17 @@ export default async function PatientProfilePage({
           </CardContent>
         </Card>
       )}
+
+      <PatientDetailsCard
+        fullName={patient.fullName}
+        email={patient.email}
+        phone={patient.phone}
+        dateOfBirth={patient.dateOfBirth}
+        detailsUpdatedAt={patient.detailsUpdatedAt}
+        consentAt={latestConsented?.consentAt ?? null}
+        consentPolicyVersion={latestConsented?.consentPolicyVersion ?? null}
+        intake={latestIntake}
+      />
 
       <PatientSessionsSection
         patientId={patient.id}

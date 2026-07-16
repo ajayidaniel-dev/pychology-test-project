@@ -20,9 +20,10 @@ const LEDGER = [
     datum: "PHQ-9 · GAD-7 · BDI-II",
   },
   {
-    title: "Clinician-first privacy",
-    description: "Anonymous patient IDs with single-use assessment links.",
-    datum: "0 names stored",
+    title: "Consent-first privacy",
+    description:
+      "Patients stay anonymous by default; identity is collected only with explicit consent, per link.",
+    datum: "consent, per link",
   },
 ] as const;
 

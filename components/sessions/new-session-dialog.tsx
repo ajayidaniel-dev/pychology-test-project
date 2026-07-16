@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { FormErrorAlert } from "@/components/ui/form-error-alert"
 import { Plus, Copy, Check } from "lucide-react"
 
@@ -31,11 +32,18 @@ interface Scale {
   isLibrary: boolean
 }
 
-export function NewSessionDialog({ patientId }: { patientId: string }) {
+export function NewSessionDialog({
+  patientId,
+  patientHasDetails = false,
+}: {
+  patientId: string
+  patientHasDetails?: boolean
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [scales, setScales] = useState<Scale[]>([])
   const [scaleId, setScaleId] = useState("")
+  const [collectDetails, setCollectDetails] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fillUrl, setFillUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -56,7 +64,7 @@ export function NewSessionDialog({ patientId }: { patientId: string }) {
     const res = await fetch(`/api/patients/${patientId}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scaleId }),
+      body: JSON.stringify({ scaleId, collectDetails }),
     })
     setLoading(false)
     if (!res.ok) {
@@ -80,6 +88,7 @@ export function NewSessionDialog({ patientId }: { patientId: string }) {
     setOpen(false)
     setFillUrl(null)
     setScaleId("")
+    setCollectDetails(false)
     setError(null)
   }
 
@@ -181,6 +190,30 @@ export function NewSessionDialog({ patientId }: { patientId: string }) {
                 </SelectContent>
               </Select>
             </div>
+            {patientHasDetails ? (
+              <p className="text-xs text-muted-foreground">
+                This patient&apos;s details are already on file — the link will
+                skip identity questions.
+              </p>
+            ) : (
+              <div className="flex items-start gap-2 pt-1">
+                <Checkbox
+                  id="collect-details"
+                  checked={collectDetails}
+                  onCheckedChange={(v) => setCollectDetails(v === true)}
+                  className="mt-0.5"
+                />
+                <div className="grid gap-0.5">
+                  <Label htmlFor="collect-details" className="cursor-pointer">
+                    Collect patient details on this link
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    After consenting, the patient is asked for their name,
+                    contact details, and a few context questions.
+                  </p>
+                </div>
+              </div>
+            )}
             {error && <FormErrorAlert message={error} />}
             <DialogFooter className="flex-col-reverse sm:flex-row">
               <Button

@@ -183,6 +183,8 @@ interface Props {
   token: string
   description?: string | null
   dbItems?: DbItem[]
+  /** Extra fields merged into the submit body (consent, details, intake). */
+  extraPayload?: Record<string, unknown>
 }
 
 /** Split scale description into summary + patient instructions for display. */
@@ -218,6 +220,7 @@ export function QuestionnaireStepForm({
   token,
   description,
   dbItems,
+  extraPayload,
 }: Props) {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
@@ -288,7 +291,7 @@ export function QuestionnaireStepForm({
     const res = await fetch(`/api/fill/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemScores }),
+      body: JSON.stringify({ itemScores, ...extraPayload }),
     })
 
     if (!res.ok) {

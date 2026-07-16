@@ -106,6 +106,11 @@ model Patient {
   displayName        String
   anonymousId        String
   psychologistId     String
+  fullName           String?
+  email              String?
+  phone              String?
+  dateOfBirth        DateTime?
+  detailsUpdatedAt   DateTime?
   createdAt          DateTime            @default(now())
   assessmentSessions AssessmentSession[]
   psychologist       User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
@@ -114,14 +119,17 @@ model Patient {
 }
 
 model AssessmentSession {
-  id             String                 @id @default(cuid())
-  patientId      String
-  psychologistId String
-  scaleId        String
-  status         SessionStatus          @default(PENDING)
-  token          String                 @unique
-  tokenExpiresAt DateTime
-  createdAt      DateTime               @default(now())
+  id                   String            @id @default(cuid())
+  patientId            String
+  psychologistId       String
+  scaleId              String
+  status               SessionStatus     @default(PENDING)
+  token                String            @unique
+  tokenExpiresAt       DateTime
+  collectDetails       Boolean           @default(false)
+  consentAt            DateTime?
+  consentPolicyVersion String?
+  createdAt            DateTime          @default(now())
   patient        Patient                @relation(fields: [patientId], references: [id], onDelete: Cascade)
   psychologist   User                   @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   scale          Scale                  @relation(fields: [scaleId], references: [id])
@@ -132,6 +140,7 @@ model QuestionnaireResponse {
   id           String            @id @default(cuid())
   sessionId    String            @unique
   itemScores   Json
+  intakeAnswers Json?
   totalScore   Int
   severity     String
   completedAt  DateTime          @default(now())

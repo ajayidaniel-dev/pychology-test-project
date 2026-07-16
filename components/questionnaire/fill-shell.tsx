@@ -2,9 +2,10 @@ import { Shield } from "lucide-react"
 
 interface FillShellProps {
   children: React.ReactNode
+  clinicianName?: string | null
 }
 
-export function FillShell({ children }: FillShellProps) {
+export function FillShell({ children, clinicianName }: FillShellProps) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -14,7 +15,11 @@ export function FillShell({ children }: FillShellProps) {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold leading-tight">Secure Questionnaire</p>
-            <p className="text-xs text-muted-foreground">Your responses are encrypted in transit</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {clinicianName
+                ? `Sent by ${clinicianName} · encrypted in transit`
+                : "Your responses are encrypted in transit"}
+            </p>
           </div>
         </div>
       </header>

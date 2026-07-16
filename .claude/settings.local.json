@@ -84,7 +84,16 @@
       "Bash(/Users/hh/.nvm/versions/node/v22.19.0/bin/node .claude/skills/impeccable/scripts/live-poll.mjs --reply edd9f89f done --file components/ui/sidebar.tsx)",
       "Bash(/Users/hh/.nvm/versions/node/v22.19.0/bin/node .claude/skills/impeccable/scripts/live-complete.mjs --id edd9f89f)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" --max-time 30 http://localhost:3000/dashboard)",
-      "Bash(rm -f /Users/hh/Documents/psychology-test/.impeccable/*.tmp.cjs /Users/hh/Documents/psychology-test/.impeccable/*.tmp.mjs)"
+      "Bash(rm -f /Users/hh/Documents/psychology-test/.impeccable/*.tmp.cjs /Users/hh/Documents/psychology-test/.impeccable/*.tmp.mjs)",
+      "Bash(yarn dev *)",
+      "Read(//usr/local/opt/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3456/)",
+      "Bash(break)",
+      "Bash(xargs kill)",
+      "Bash(curl -s -w \"\\\\n%{http_code}\\\\n\" -X POST http://localhost:3456/api/fill/f6215cf551ad44f104c0a55a30abb9a17d791d958313e431 -H \"Content-Type: application/json\" -d '{\"itemScores\":{\"1\":0,\"2\":0,\"3\":0,\"4\":0,\"5\":0,\"6\":0,\"7\":0,\"8\":0,\"9\":0},\"consent\":true,\"details\":{\"fullName\":\"Test Patient One\",\"email\":\"patient.one@example.test\",\"phone\":\"+2348012345678\"},\"intake\":{\"familySize\":4,\"lifeEvents\":\"Recent job loss\"}}')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST http://localhost:3456/api/fill/f6215cf551ad44f104c0a55a30abb9a17d791d958313e431 -H \"Content-Type: application/json\" -d '{\"itemScores\":{\"1\":0},\"consent\":true}')",
+      "Bash(curl -s -w \" %{http_code}\\\\n\" -X POST http://localhost:3456/api/fill/aa8a69b2fdc372759b46c1da7f0fbfe703ad32729d5caebc -H \"Content-Type: application/json\" -d '{\"itemScores\":{\"1\":0,\"2\":0,\"3\":0,\"4\":0,\"5\":0,\"6\":0,\"7\":0,\"8\":0,\"9\":0}}')",
+      "Bash(curl -s -w \" %{http_code}\\\\n\" -X POST http://localhost:3456/api/fill/aa8a69b2fdc372759b46c1da7f0fbfe703ad32729d5caebc -H \"Content-Type: application/json\" -d '{\"itemScores\":{\"1\":0,\"2\":0,\"3\":0,\"4\":0,\"5\":0,\"6\":0,\"7\":0,\"8\":0,\"9\":0},\"consent\":true,\"details\":{\"fullName\":\"X\",\"email\":\"x@y.test\",\"phone\":\"123\"}}')"
     ],
     "additionalDirectories": [
       "/Users/hh/Documents/psychology-test/.impeccable"
