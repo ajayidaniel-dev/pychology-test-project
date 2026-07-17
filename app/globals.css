@@ -169,31 +169,6 @@
   }
 }
 
-/* Public landing hero: the alert point's expanding ring. The only motion on
-   the page — it depicts the product's promise (a threshold alert firing). */
-@keyframes landing-alert-pulse {
-  0% {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(3.5);
-  }
-}
-.landing-alert-pulse {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: landing-alert-pulse 2.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .landing-alert-pulse {
-    animation: none;
-    opacity: 0;
-  }
-}
-
 /* Public legal documents: prose rhythm without a typography plugin. */
 @layer components {
   .legal-prose {

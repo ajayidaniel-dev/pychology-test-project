@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 
 import { authOptions } from "@/lib/auth"
-import { LandingPage } from "@/components/landing/landing-page"
+import { LandingSwiss } from "@/components/landing/landing-swiss"
 
 export const metadata = {
   description:
@@ -14,5 +14,5 @@ export default async function RootPage() {
   const session = await getServerSession(authOptions)
   if (session) redirect("/dashboard")
 
-  return <LandingPage />
+  return <LandingSwiss />
 }
