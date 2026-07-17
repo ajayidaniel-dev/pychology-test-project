@@ -29,3 +29,17 @@ PRODUCT.md
 *.tsbuildinfo
 next-env.d.ts
 /lib/generated/prisma
+
+# os
+.DS_Store
+
+# tests
+/coverage/
+
+# local databases
+prisma/*.db
+prisma/*.db-journal
+
+# misc
+*.log
+.eslintcache

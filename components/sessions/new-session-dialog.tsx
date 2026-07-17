@@ -74,7 +74,6 @@ export function NewSessionDialog({
     const data = await res.json()
     setFillUrl(data.fillUrl)
     toast.success("Session created")
-    router.refresh()
   }
 
   function onCopy() {
@@ -85,11 +84,15 @@ export function NewSessionDialog({
   }
 
   function onClose() {
+    const created = fillUrl !== null
     setOpen(false)
     setFillUrl(null)
     setScaleId("")
     setCollectDetails(false)
     setError(null)
+    // Refresh the sessions list only after the dialog closes, so the
+    // copy-link view survives until the clinician is done with it.
+    if (created) router.refresh()
   }
 
   const libraryScales = scales.filter((s) => s.isLibrary)

@@ -140,6 +140,16 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Number inputs: no native spinner arrows anywhere in the app */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 }
 
 /* Sidebar nav hierarchy: inactive routes recede, the active route reads at a
