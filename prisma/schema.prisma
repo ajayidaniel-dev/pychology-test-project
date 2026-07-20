@@ -111,6 +111,12 @@ model Patient {
   phone              String?
   dateOfBirth        DateTime?
   detailsUpdatedAt   DateTime?
+  // Cross-session clinical summary. summarySessionCount records how many
+  // completed sessions it was built from, so the UI can tell the clinician the
+  // summary predates newer assessments instead of showing it as current.
+  summary             Json?
+  summaryGeneratedAt  DateTime?
+  summarySessionCount Int?
   createdAt          DateTime            @default(now())
   assessmentSessions AssessmentSession[]
   psychologist       User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
