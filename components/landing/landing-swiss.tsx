@@ -46,9 +46,11 @@ export function LandingSwiss() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-6 py-4">
-          <span className="font-mono text-xs tracking-[0.08em] text-muted-foreground">
-            <span className="font-semibold text-foreground">APAS</span> ·
-            CLINICAL OVERWATCH
+          {/* The descriptor wrapped to a second line on narrow screens and
+              crowded the controls; below sm the wordmark carries it alone. */}
+          <span className="font-mono text-xs whitespace-nowrap tracking-[0.08em] text-muted-foreground">
+            <span className="font-semibold text-foreground">APAS</span>
+            <span className="hidden sm:inline"> · CLINICAL OVERWATCH</span>
           </span>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -113,7 +115,10 @@ export function LandingSwiss() {
       {/* Capabilities as a ruled index */}
       <section className="border-b">
         <div className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
-          <h2 className="text-sm font-semibold tracking-[-0.01em]">
+          {/* Was text-sm — smaller than the text-lg item titles it introduced,
+              which inverted the hierarchy. Set as a mono eyebrow so it reads
+              as a section marker rather than competing with those titles. */}
+          <h2 className="font-mono text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             What clinicians get
           </h2>
           <div className="mt-8">
