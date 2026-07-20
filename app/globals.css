@@ -238,4 +238,9 @@
   .print-hidden {
     display: none !important;
   }
+  /* shadcn's Table wraps in an overflow-x-auto container, which clips wide
+     rows on paper. Print has no scrollbars, so let content flow instead. */
+  .print-report [data-slot="table-container"] {
+    overflow: visible;
+  }
 }

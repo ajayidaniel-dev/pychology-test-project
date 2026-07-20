@@ -9,6 +9,14 @@ import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { PrintButton } from "@/components/sessions/print-button"
 import { Button } from "@/components/ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import type { ClinicalNarrative } from "@/app/api/narrative/route"
 
 export const metadata: Metadata = {
@@ -105,22 +113,28 @@ export default async function SessionReportPage({
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Item scores</h2>
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="py-1.5 pr-2 font-semibold">Item</th>
-              <th className="py-1.5 font-semibold">Answer</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow className="text-xs uppercase tracking-wide text-muted-foreground hover:bg-transparent">
+              <TableHead className="h-auto py-1.5 pr-2 font-semibold text-muted-foreground">
+                Item
+              </TableHead>
+              <TableHead className="h-auto w-24 py-1.5 font-semibold text-muted-foreground">
+                Answer
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {Object.entries(itemScores).map(([key, score]) => (
-              <tr key={key} className="border-b border-border/60">
-                <td className="py-1.5 pr-2">{itemLabelMap[key] ?? `Item ${key}`}</td>
-                <td className="py-1.5">{score}</td>
-              </tr>
+              <TableRow key={key} className="border-border/60 hover:bg-transparent">
+                <TableCell className="whitespace-normal py-1.5 pr-2 align-top">
+                  {itemLabelMap[key] ?? `Item ${key}`}
+                </TableCell>
+                <TableCell className="py-1.5 align-top tabular-nums">{score}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </section>
 
       <section className="space-y-4">
