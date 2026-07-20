@@ -153,7 +153,9 @@ export function TanStackDataTable<T>({
                   <TableHead
                     key={header.id}
                     className={cn(
-                      "h-11 px-4 text-muted-foreground first:pl-6 last:pr-6",
+                      // group/th drives the sort-affordance reveal in
+                      // DataTableColumnHeader.
+                      "group/th h-11 px-4 text-muted-foreground first:pl-6 last:pr-6",
                       header.column.id === "actions" && "w-12 px-2",
                       (header.column.columnDef.meta as { className?: string } | undefined)
                         ?.className,

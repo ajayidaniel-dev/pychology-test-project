@@ -38,12 +38,21 @@ export function DataTableColumnHeader<TData, TValue>({
       onClick={() => column.toggleSorting(sorted === "asc")}
     >
       {title}
+      {/*
+        The active direction always shows. The neutral affordance only appears
+        on hover/focus — one per column across a whole table read as noise and
+        competed with the data. Space is reserved either way, so revealing it
+        never shifts the header.
+      */}
       {sorted === "asc" ? (
         <ArrowUp className="size-3.5" />
       ) : sorted === "desc" ? (
         <ArrowDown className="size-3.5" />
       ) : (
-        <ArrowUpDown className="size-3.5 opacity-50" />
+        <ArrowUpDown
+          aria-hidden
+          className="size-3.5 opacity-0 transition-opacity group-hover/th:opacity-50 group-focus-within/th:opacity-50"
+        />
       )}
     </Button>
   )

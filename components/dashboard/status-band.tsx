@@ -1,4 +1,15 @@
 import Link from "next/link"
+import { AlertTriangle, Clock, Users } from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import {
+  Card,
+  CardAction,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
 interface Stats {
@@ -10,19 +21,20 @@ interface Stats {
 
 interface Segment {
   label: string
-  /** Fits the narrow three-up mobile band; falls back to label. */
-  shortLabel?: string
   value: number
   href: string
   ariaLabel: string
+  icon: React.ElementType
   valueClass?: string
-  detail?: React.ReactNode
+  badge?: React.ReactNode
+  footnote: string
 }
 
 /**
- * Dense one-line practice status: patients · open alerts · awaiting response.
+ * Practice status at a glance: patients · open alerts · awaiting response.
  * Severity color appears only on the alert figure, only when real risk exists
- * (Severity Monopoly Rule).
+ * (Severity Monopoly Rule), and never alone — it always ships with the
+ * "N critical" badge so the state survives colorblindness and grayscale.
  */
 export function StatusBand({ stats }: { stats: Stats }) {
   const segments: Segment[] = [
@@ -30,12 +42,15 @@ export function StatusBand({ stats }: { stats: Stats }) {
       label: "Active patients",
       value: stats.totalPatients,
       href: "/patients",
+      icon: Users,
       ariaLabel: `${stats.totalPatients} active patient${stats.totalPatients === 1 ? "" : "s"} — view patients`,
+      footnote: "In your caseload",
     },
     {
       label: "Open alerts",
       value: stats.openAlerts,
       href: "#alerts",
+      icon: AlertTriangle,
       ariaLabel:
         stats.criticalAlerts > 0
           ? `${stats.openAlerts} open alerts, ${stats.criticalAlerts} critical — view alert queue`
@@ -46,54 +61,68 @@ export function StatusBand({ stats }: { stats: Stats }) {
           : stats.openAlerts > 0
             ? "text-severity-high"
             : undefined,
-      detail:
+      badge:
         stats.criticalAlerts > 0 ? (
-          <span className="text-xs font-medium text-severity-critical">
+          <Badge
+            variant="outline"
+            className="border-severity-critical/30 bg-severity-critical/10 text-severity-critical"
+          >
+            <AlertTriangle className="size-3" aria-hidden />
             {stats.criticalAlerts} critical
-          </span>
+          </Badge>
         ) : null,
+      footnote:
+        stats.openAlerts > 0 ? "Needs review" : "Nothing needs attention",
     },
     {
       label: "Awaiting response",
-      shortLabel: "Awaiting",
       value: stats.pendingSessions,
       href: "/patients",
+      icon: Clock,
       ariaLabel: `${stats.pendingSessions} assessment${stats.pendingSessions === 1 ? "" : "s"} awaiting patient response`,
+      footnote: "Links sent, not yet returned",
     },
   ]
 
   return (
-    <div className="grid grid-cols-3 divide-x rounded-xl border bg-card shadow-sm">
-      {segments.map((segment) => (
-        <Link
-          key={segment.label}
-          href={segment.href}
-          aria-label={segment.ariaLabel}
-          className="group min-w-0 px-4 py-3 outline-none transition-colors first:rounded-l-xl last:rounded-r-xl hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 md:px-6"
-        >
-          <p className="truncate text-xs font-medium text-muted-foreground">
-            {segment.shortLabel ? (
-              <>
-                <span className="sm:hidden">{segment.shortLabel}</span>
-                <span className="hidden sm:inline">{segment.label}</span>
-              </>
-            ) : (
-              segment.label
-            )}
-          </p>
-          <p className="mt-0.5 flex items-baseline gap-2">
-            <span
-              className={cn(
-                "text-2xl font-semibold tracking-tight",
-                segment.valueClass,
-              )}
-            >
-              {segment.value}
-            </span>
-            {segment.detail}
-          </p>
-        </Link>
-      ))}
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {segments.map((segment) => {
+        const Icon = segment.icon
+        return (
+          <Card
+            key={segment.label}
+            className="relative gap-2 py-5 transition-colors hover:border-ring/40 hover:bg-accent/30"
+          >
+            <CardHeader>
+              <CardDescription className="flex items-center gap-1.5">
+                <Icon className="size-3.5" aria-hidden />
+                {segment.label}
+              </CardDescription>
+              {/* Proportional figures: tabular-nums looks loose at display size,
+                  and these values never align in a column. */}
+              <CardTitle
+                className={cn(
+                  "text-3xl font-semibold tracking-tight",
+                  segment.valueClass,
+                )}
+              >
+                {/* Stretched link: the whole card is the hit target. */}
+                <Link
+                  href={segment.href}
+                  aria-label={segment.ariaLabel}
+                  className="rounded-xl outline-none before:absolute before:inset-0 before:rounded-xl focus-visible:before:ring-[3px] focus-visible:before:ring-ring/50"
+                >
+                  {segment.value}
+                </Link>
+              </CardTitle>
+              {segment.badge && <CardAction>{segment.badge}</CardAction>}
+            </CardHeader>
+            <CardFooter>
+              <p className="text-xs text-muted-foreground">{segment.footnote}</p>
+            </CardFooter>
+          </Card>
+        )
+      })}
     </div>
   )
 }

@@ -95,10 +95,11 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* The sticky header already names the page; repeating "Dashboard" here
+          was pure duplication. Keep the greeting as the only lead-in. */}
       <PageHeader
-        title="Dashboard"
-        description={`Welcome back, ${session.user.name}`}
-        hideTitleOnMobile
+        title={`Welcome back, ${session.user.name}`}
+        description="Here's what needs your attention today."
       />
 
       <StatusBand
