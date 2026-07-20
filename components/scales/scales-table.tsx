@@ -38,8 +38,17 @@ const columns: ColumnDef<ScaleTableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Description" />
     ),
+    /*
+     * truncate, not line-clamp-1: TableCell sets whitespace-nowrap, so the
+     * text never forms a second line box and line-clamp produced no ellipsis
+     * — the cell just hard-clipped mid-word. title= keeps the full text
+     * reachable on hover now that it's visibly shortened.
+     */
     cell: ({ row }) => (
-      <span className="line-clamp-1 max-w-md text-muted-foreground">
+      <span
+        className="block truncate text-muted-foreground"
+        title={row.original.description ?? undefined}
+      >
         {row.original.description ?? "—"}
       </span>
     ),

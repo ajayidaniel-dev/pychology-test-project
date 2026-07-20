@@ -22,7 +22,9 @@ export default async function SettingsPage() {
   if (!user) redirect("/auth/signin")
 
   return (
-    <div className="flex flex-col gap-6">
+    // Settings is a form column, not a data surface: constrained to a readable
+    // measure so inputs don't stretch the full dashboard width.
+    <div className="flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
         title="Settings"
         description="Manage your profile, password, and notification preferences."
