@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   type ColumnDef,
@@ -190,14 +191,27 @@ export function TanStackDataTable<T>({
                   ? isRowClickable(original)
                   : Boolean(href || onRowClick)
 
+                // When the row resolves to a URL we render a real anchor in the
+                // first cell and stretch it over the row. Row-level onClick
+                // alone gave no link semantics — no cmd/middle-click, no "open
+                // in new tab", and screen readers announced a row, not a link.
+                // Rows that only have onRowClick keep the keyboard-activated
+                // fallback.
+                const usesStretchedLink = Boolean(href)
+
                 return (
                   <TableRow
                     key={row.id}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={() => clickable && handleRowActivate(original)}
+                    tabIndex={clickable && !usesStretchedLink ? 0 : undefined}
+                    onClick={
+                      usesStretchedLink
+                        ? undefined
+                        : () => clickable && handleRowActivate(original)
+                    }
                     onKeyDown={(event) => {
                       if (
                         clickable &&
+                        !usesStretchedLink &&
                         (event.key === "Enter" || event.key === " ")
                       ) {
                         event.preventDefault()
@@ -207,11 +221,11 @@ export function TanStackDataTable<T>({
                     className={cn(
                       "relative transition-colors",
                       clickable && "cursor-pointer hover:bg-muted/50",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      "focus-within:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                       getRowClassName?.(original),
                     )}
                   >
-                    {row.getVisibleCells().map((cell) => (
+                    {row.getVisibleCells().map((cell, cellIndex) => (
                       <TableCell
                         key={cell.id}
                         className={cn(
@@ -226,9 +240,21 @@ export function TanStackDataTable<T>({
                           }
                         }}
                       >
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
+                        {usesStretchedLink && cellIndex === 0 ? (
+                          // before: pseudo covers the row without becoming a
+                          // real element over it, so cell text stays selectable
+                          // and the actions cell (z-20) still wins clicks.
+                          <Link
+                            href={href!}
+                            className="rounded-sm outline-none before:absolute before:inset-0 before:z-10"
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </Link>
+                        ) : (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
                         )}
                       </TableCell>
                     ))}

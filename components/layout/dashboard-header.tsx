@@ -12,10 +12,15 @@ const TITLES: Record<string, string> = {
   "/settings": "Settings",
 }
 
+/**
+ * Detail routes resolve to their *section*, not a singular noun: the page
+ * itself already names the record (breadcrumb + profile header), so "Patient"
+ * here was both redundant and less specific than what sat directly below it.
+ */
 function getPageTitle(pathname: string): string {
   if (TITLES[pathname]) return TITLES[pathname]
-  if (pathname.startsWith("/patients/")) return "Patient"
-  if (pathname.startsWith("/scales/")) return "Scale"
+  if (pathname.startsWith("/patients/")) return "Patients"
+  if (pathname.startsWith("/scales/")) return "Scales"
   return "APAS"
 }
 
@@ -27,9 +32,14 @@ export function DashboardHeader() {
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 overflow-visible border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
       <SidebarTrigger className="-ml-1 size-9 md:hidden" />
       <Separator orientation="vertical" className="mr-1 h-4" />
-      <h1 className="min-w-0 flex-1 truncate text-sm font-semibold md:text-base">
+      {/*
+        Deliberately not an <h1>: PageHeader already renders the page heading,
+        and two h1s per page gave assistive tech two competing document titles.
+        This is persistent chrome — a location label, not the page's heading.
+      */}
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold md:text-base">
         {title}
-      </h1>
+      </span>
       <DashboardNavbarActions />
     </header>
   )

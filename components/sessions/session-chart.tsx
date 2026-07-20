@@ -85,18 +85,28 @@ export function SessionChart({ scale, data }: Props) {
 
   if (data.length === 0) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
+      <p className="py-6 text-sm text-muted-foreground">
         No score data to display yet.
       </p>
     )
   }
 
+  /*
+   * A single point is not a trend, so don't pretend to plot one — show the
+   * score as a figure and say plainly what's missing. Left-aligned to the
+   * card: centring inside a max-w container left the text visibly off-centre
+   * against the full-width card.
+   */
   if (data.length === 1) {
     return (
-      <p className="py-8 text-center text-sm text-muted-foreground">
-        One session recorded (score: {data[0].score}). More sessions needed to
-        show a trend.
-      </p>
+      <div className="flex items-baseline gap-3 py-2">
+        <span className="text-3xl font-semibold tracking-tight">
+          {data[0].score}
+        </span>
+        <span className="text-sm text-muted-foreground">
+          One session recorded — a second is needed before a trend can be shown.
+        </span>
+      </div>
     )
   }
 

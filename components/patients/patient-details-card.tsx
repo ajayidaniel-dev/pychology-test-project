@@ -53,13 +53,20 @@ function ageFrom(dob: Date) {
   return age
 }
 
+/*
+ * Fixed label column with the value directly beside it. The previous
+ * justify-between pushed values to the far right edge, so on a wide card the
+ * eye had to cross the whole width to pair a label with its value — and
+ * `truncate` silently cut long values (an email could lose its TLD). Values
+ * now wrap instead of being clipped.
+ */
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1.5">
-      <dt className="shrink-0 text-xs font-medium text-muted-foreground">
+    <div className="grid gap-0.5 py-2 sm:grid-cols-[11rem_1fr] sm:gap-4 sm:py-1.5">
+      <dt className="text-xs font-medium text-muted-foreground sm:pt-px">
         {label}
       </dt>
-      <dd className="min-w-0 truncate text-right text-sm">{value}</dd>
+      <dd className="min-w-0 text-sm break-words">{value}</dd>
     </div>
   )
 }
@@ -141,8 +148,10 @@ export function PatientDetailsCard({
           )}
 
           {hasIntake && intake && (
-            <div className={hasIdentity ? "mt-4 border-t pt-3" : undefined}>
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
+            <div className={hasIdentity ? "mt-5 border-t pt-4" : undefined}>
+              {/* Uppercase + tracking so this reads as a section heading rather
+                  than just another field label at the same weight. */}
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Intake context
               </p>
               <dl className="divide-y divide-border/60">
