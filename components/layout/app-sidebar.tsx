@@ -3,8 +3,8 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { signOut, useSession } from "next-auth/react"
-import { BookOpen, LayoutDashboard, LogOut, Settings, Users, X } from "lucide-react"
+import { BookOpen, LayoutDashboard, Settings, Users, X } from "lucide-react"
+import { NavUser } from "@/components/layout/nav-user"
 import { SidebarCollapseTrigger } from "@/components/layout/sidebar-collapse-trigger"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,23 +27,9 @@ const NAV = [
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const
 
-function getInitials(name?: string | null) {
-  if (!name) return "?"
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase()
-}
-
 export function AppSidebar() {
   const pathname = usePathname()
   const { isMobile, setOpenMobile } = useSidebar()
-  const { data: session } = useSession()
-  const displayName = session?.user?.name ?? "Clinician"
-  const email = session?.user?.email ?? ""
-  const initials = getInitials(session?.user?.name)
 
   useEffect(() => {
     setOpenMobile(false)
@@ -131,37 +117,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              className="pointer-events-none h-auto py-2 group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
-              tooltip={displayName}
-            >
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-medium text-sidebar-primary-foreground">
-                {initials}
-              </span>
-              <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="truncate font-medium">{displayName}</span>
-                {email ? (
-                  <span className="truncate text-xs text-sidebar-foreground/70">
-                    {email}
-                  </span>
-                ) : null}
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Log out"
-              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => signOut({ callbackUrl: "/auth/signin" })}
-            >
-              <LogOut />
-              <span>Log out</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <NavUser />
       </SidebarFooter>
 
       <SidebarCollapseTrigger />
