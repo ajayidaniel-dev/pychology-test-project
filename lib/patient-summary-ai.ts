@@ -1,16 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
-import { checkRateLimit } from '@/lib/rate-limit'
+import { computeAlerts, getScaleMeta } from '@/lib/alert-rules'
+import { scaleNameToEnum } from '@/lib/patient-summary'
 import type { ClinicalNarrative } from '@/app/api/narrative/route'
 import type { IntakeAnswers } from '@/lib/consent'
 import { z } from 'zod'
-
-const BodySchema = z.object({
-  regenerate: z.boolean().optional(),
-})
 
 export type PatientSummary = {
   arc: string
@@ -178,19 +172,23 @@ function ageFrom(dob: Date): number {
   return age
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+type SummaryResult =
+  | { ok: true; summary: PatientSummary; sessionCount: number }
+  | { ok: false; reason: string }
 
-  const parsed = BodySchema.safeParse(await req.json().catch(() => ({})))
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
-  const { regenerate } = parsed.data
-
-  const patient = await prisma.patient.findFirst({
-    where: { id: params.id, psychologistId: session.user.id },
+/**
+ * Generates the cross-session clinical summary for a patient and stores it on
+ * the Patient row. Called automatically after a questionnaire is completed —
+ * so it runs once per completion and captures the newest session's context.
+ *
+ * Resolves rather than throws for expected conditions (no completed sessions,
+ * missing API key, model error) so the caller can fire-and-forget safely.
+ */
+export async function generateAndStorePatientSummary(
+  patientId: string,
+): Promise<SummaryResult> {
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
     include: {
       assessmentSessions: {
         where: { status: 'COMPLETED', response: { isNot: null } },
@@ -200,43 +198,13 @@ export async function POST(
     },
   })
 
-  if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!patient) return { ok: false, reason: 'patient-not-found' }
 
   const completed = patient.assessmentSessions.filter((s) => s.response)
-  if (completed.length === 0) {
-    return NextResponse.json(
-      { error: 'This patient has no completed assessments to summarise yet.' },
-      { status: 400 },
-    )
-  }
-
-  // Serve the stored summary unless it predates a newer assessment or the
-  // clinician explicitly asked for a rebuild.
-  const isStale = patient.summarySessionCount !== completed.length
-  if (patient.summary && !regenerate && !isStale) {
-    return NextResponse.json({
-      summary: patient.summary,
-      generatedAt: patient.summaryGeneratedAt,
-      sessionCount: patient.summarySessionCount,
-      cached: true,
-    })
-  }
+  if (completed.length === 0) return { ok: false, reason: 'no-completed-sessions' }
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set in .env.local' }, { status: 500 })
-  }
-
-  const rate = checkRateLimit(`patient-summary:${session.user.id}`, 5, 60_000)
-  if (!rate.allowed) {
-    return NextResponse.json(
-      { error: 'Too many summary requests. Wait a moment and try again.' },
-      { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } },
-    )
-  }
-
-  const { computeAlerts, getScaleMeta } = await import('@/lib/alert-rules')
-  const { scaleNameToEnum } = await import('@/lib/patient-summary')
+  if (!apiKey) return { ok: false, reason: 'no-api-key' }
 
   const sessionInputs: SessionInput[] = completed.map((s) => {
     const scaleEnum = scaleNameToEnum(s.scale.name)
@@ -287,41 +255,28 @@ export async function POST(
     ],
   })
 
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status })
-  }
-  const data = result.data
+  if (!result.ok) return { ok: false, reason: `model-error:${result.status}` }
+  if (result.data.stop_reason === 'refusal') return { ok: false, reason: 'refusal' }
 
-  if (data.stop_reason === 'refusal') {
-    return NextResponse.json(
-      { error: 'The model declined to generate this summary.' },
-      { status: 502 },
-    )
-  }
-
-  const text = data.content?.find((b: { type: string }) => b.type === 'text')?.text
+  const text = result.data.content?.find(
+    (b: { type: string }) => b.type === 'text',
+  )?.text
   let summary: PatientSummary
   try {
     if (!text) throw new Error('empty response')
     summary = SummarySchema.parse(JSON.parse(text))
   } catch {
-    return NextResponse.json({ error: 'Malformed summary from model. Try again.' }, { status: 502 })
+    return { ok: false, reason: 'malformed-output' }
   }
 
-  const generatedAt = new Date()
   await prisma.patient.update({
     where: { id: patient.id },
     data: {
       summary,
-      summaryGeneratedAt: generatedAt,
+      summaryGeneratedAt: new Date(),
       summarySessionCount: completed.length,
     },
   })
 
-  return NextResponse.json({
-    summary,
-    generatedAt,
-    sessionCount: completed.length,
-    cached: false,
-  })
+  return { ok: true, summary, sessionCount: completed.length }
 }

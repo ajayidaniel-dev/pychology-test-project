@@ -4,6 +4,7 @@ import { isTokenExpired } from '@/lib/token'
 import { Prisma } from '@prisma/client'
 import { computeNumericScore, lookupSeverity, validateItemScores } from '@/lib/scale-scoring'
 import { createSessionSubmitNotifications } from '@/lib/notifications'
+import { generateAndStorePatientSummary } from '@/lib/patient-summary-ai'
 import {
   CONSENT_POLICY_VERSION,
   IntakeSchema,
@@ -140,6 +141,26 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     itemScores: itemScores as Record<string, number>,
     storedSeverity: severity,
   })
+
+  // Refresh the patient's cross-session AI summary now that a new assessment
+  // has landed. Fire-and-forget: the patient's submission must not wait on a
+  // ~15s model call, and a failed summary just means it retries on the next
+  // completion. Runs on the persistent Node server after the response is sent.
+  void generateAndStorePatientSummary(assessmentSession.patientId).then(
+    (r) => {
+      if (!r.ok) {
+        console.warn(
+          `[patient-summary] skipped for ${assessmentSession.patientId}: ${r.reason}`,
+        )
+      }
+    },
+    (err) => {
+      console.error(
+        `[patient-summary] failed for ${assessmentSession.patientId}:`,
+        err,
+      )
+    },
+  )
 
   return NextResponse.json({ ok: true })
 }

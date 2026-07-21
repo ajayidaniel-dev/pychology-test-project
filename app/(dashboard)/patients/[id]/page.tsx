@@ -13,7 +13,7 @@ import { PatientActions } from "@/components/patients/patient-actions"
 import { PatientDetailsCard } from "@/components/patients/patient-details-card"
 import { PatientProfileHeader } from "@/components/patients/patient-profile-header"
 import { PatientSummaryCard } from "@/components/patients/patient-summary-card"
-import type { PatientSummary } from "@/app/api/patients/[id]/summary/route"
+import type { PatientSummary } from "@/lib/patient-summary-ai"
 import type { IntakeAnswers } from "@/lib/consent"
 import { PatientSessionsSection } from "@/components/patients/patient-sessions-section"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -165,13 +165,9 @@ export default async function PatientProfilePage({
 
       {completed.length > 0 && (
         <PatientSummaryCard
-          patientId={patient.id}
           completedCount={completed.length}
-          initialSummary={(patient.summary as PatientSummary | null) ?? null}
-          initialGeneratedAt={
-            patient.summaryGeneratedAt?.toISOString() ?? null
-          }
-          initialSessionCount={patient.summarySessionCount ?? null}
+          summary={(patient.summary as PatientSummary | null) ?? null}
+          generatedAt={patient.summaryGeneratedAt ?? null}
         />
       )}
 
