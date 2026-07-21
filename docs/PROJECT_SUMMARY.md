@@ -33,7 +33,7 @@ Patients complete assessments on mobile-friendly forms via a unique token link. 
 | Charts | Recharts |
 | AI summaries | Anthropic Claude API (`/api/narrative`) |
 | Toasts | Sonner |
-| Tests | Jest (34 tests across 7 suites) |
+| Tests | Jest (51 tests across 9 suites) |
 
 ---
 
@@ -43,6 +43,7 @@ Patients complete assessments on mobile-friendly forms via a unique token link. 
 /auth/signin ──┬──> /dashboard
 /auth/signup ──┘         │
 /auth/verify-email       ├──> /patients ──> /patients/[id] ──> /patients/[id]/sessions/[sessionId]
+                         │                                            └──> …/questionnaires/[questionnaireId]
                          ├──> /scales ──> /scales/[id]
                          │              └──> /scales/new (wizard)
                          │
@@ -51,8 +52,9 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 
 ### Clinician dashboard
 - **Dashboard** — stat cards, alert feed for high-severity results, caseload table
-- **Patients** — searchable patient list, profile with score history chart, session management
-- **Session detail** — item scores, severity badges, AI clinical summary, Mark Reviewed / Escalate actions
+- **Patients** — searchable patient list, profile with score history chart, session list, notes
+- **Session detail** — an appointment: title, reason, date; the questionnaires attached to it, one shared fill link, session notes
+- **Questionnaire detail** — item scores, severity badges, AI clinical summary, Mark Reviewed / Escalate actions, questionnaire notes
 - **Scales** — library instruments (read-only) + custom scales; 3-step builder for new scales
 
 ### Patient-facing
@@ -66,10 +68,15 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 
 - **User** — clinician accounts
 - **Patient** — anonymous ID (e.g. P-001), optional display name
-- **Scale / ScaleItem / SeverityThreshold** — questionnaires and scoring rules
-- **AssessmentSession** — pending/completed/expired link with token + expiry
+- **Scale / ScaleItem / SeverityThreshold** — instrument definitions and scoring rules
+- **ClinicalSession** — an appointment: title, reason, date, status. Owns the single fill link (token + expiry) shared by every questionnaire in it
+- **Questionnaire** — one scale administered within a session; pending/completed/expired
 - **QuestionnaireResponse** — scores, severity, `reviewedAt`, `escalatedAt`
+- **Note** — clinician notes, attachable to a patient, a session, or a single questionnaire
 - **Notification** — in-app alerts with deduplication and deep links
+
+A session is not a questionnaire. One session holds many questionnaires, the
+patient receives one link for all of them, and consent is captured once.
 
 ### Library scales (seeded)
 PHQ-9, GAD-7, BDI-II, DASS-21, AUDIT, PCL-5
@@ -118,7 +125,8 @@ All data tables migrated from a basic `DataTable` wrapper to a shared TanStack T
 | Dashboard caseload | `caseload-table.tsx` |
 | Patients list | `patient-list-table.tsx` |
 | Patient sessions | `patient-sessions-table.tsx` |
-| Session item scores | `item-scores-table.tsx` |
+| Session questionnaires | `session-questionnaires-table.tsx` |
+| Questionnaire item scores | `item-scores-table.tsx` |
 | Scale thresholds | `scale-thresholds-table.tsx` |
 | Scales library + my scales | `scales-table.tsx` |
 
@@ -140,10 +148,18 @@ All data tables migrated from a basic `DataTable` wrapper to a shared TanStack T
 - BDI-II description split: scale summary vs. instructions on separate lines
 - AI narrative route uses Claude API (model must be kept current — retired models return 404)
 
-### 6. Session review actions
+### 6. Questionnaire review actions
 
 - **Mark Reviewed** — sets `reviewedAt`, clears unreviewed notifications
 - **Escalate to Supervisor** — sets `escalatedAt` (audit flag; no email/supervisor workflow yet)
+
+### 7. Sessions separated from questionnaires
+
+Sessions used to *be* questionnaires — creating one forced a scale choice up
+front. Split into `ClinicalSession` (the appointment) and `Questionnaire` (a
+scale within it), with one fill link per session and notes at all three levels.
+Full write-up in
+[`docs/sessions-questionnaires-split-report.md`](sessions-questionnaires-split-report.md).
 
 ---
 
@@ -160,11 +176,12 @@ components/
   data-table/      # TanStack Table kit
   dashboard/       # Stat cards, alerts, caseload
   layout/          # Sidebar, header, shell, HeaderMenu
+  notes/           # Note list + composer, shared across all three levels
   notifications/   # Bell, notification rows
-  patients/        # List, profile, sessions
+  patients/        # List, profile, session list
   questionnaire/   # Patient fill flow
   scales/          # Library, wizard, thresholds
-  sessions/        # Charts, narrative, item scores
+  sessions/        # Session detail, questionnaires, charts, narrative, item scores
 
 lib/
   notifications.ts # Notification service
