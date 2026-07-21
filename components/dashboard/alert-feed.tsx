@@ -14,6 +14,7 @@ interface SessionWithPatient {
   scale: string
   scaleName: string
   patientId: string
+  sessionId: string
   patient: { anonymousId: string }
   storedSeverity?: string | null
   completedAt?: Date | null
@@ -136,7 +137,7 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
                 )}
                 <Button variant="outline" size="sm" className="shrink-0" asChild>
                   <Link
-                    href={`/patients/${session.patientId}/sessions/${session.id}`}
+                    href={`/patients/${session.patientId}/sessions/${session.sessionId}/questionnaires/${session.id}`}
                   >
                     Review
                     <span className="sr-only">

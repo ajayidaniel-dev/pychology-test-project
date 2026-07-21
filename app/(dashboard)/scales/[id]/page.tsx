@@ -40,13 +40,13 @@ export default async function ScaleDetailPage({
         include: { options: { orderBy: { order: "asc" } } },
       },
       thresholds: { orderBy: { minScore: "asc" } },
-      _count: { select: { assessmentSessions: true } },
+      _count: { select: { questionnaires: true } },
     },
   })
 
   if (!scale) notFound()
 
-  const canDelete = !scale.isLibrary && scale._count.assessmentSessions === 0
+  const canDelete = !scale.isLibrary && scale._count.questionnaires === 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,12 +62,12 @@ export default async function ScaleDetailPage({
       <ScaleThresholdsSection thresholds={scale.thresholds} />
 
       <p className="text-xs text-muted-foreground">
-        Used in {scale._count.assessmentSessions} assessment session
-        {scale._count.assessmentSessions !== 1 ? "s" : ""}.
+        Used in {scale._count.questionnaires} questionnaire
+        {scale._count.questionnaires !== 1 ? "s" : ""}.
         {!canDelete &&
           !scale.isLibrary &&
-          scale._count.assessmentSessions > 0 &&
-          " Scale cannot be deleted while sessions reference it."}
+          scale._count.questionnaires > 0 &&
+          " Scale cannot be deleted while questionnaires reference it."}
       </p>
     </div>
   )

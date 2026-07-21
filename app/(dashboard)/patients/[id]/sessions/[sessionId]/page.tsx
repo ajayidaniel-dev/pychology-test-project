@@ -1,48 +1,37 @@
-import dynamic from "next/dynamic"
 import type { Metadata } from "next"
 import { getServerSession } from "next-auth"
 import { redirect, notFound } from "next/navigation"
-import { AlertTriangle } from "lucide-react"
+import { Link2Off } from "lucide-react"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { isTokenExpired } from "@/lib/token"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
-import { SessionDetailHeader } from "@/components/sessions/session-detail-header"
-import { ScoreSummaryCard } from "@/components/sessions/score-summary-card"
-import { ItemScoresSection } from "@/components/sessions/item-scores-section"
-import type { ItemScoreRow } from "@/components/sessions/item-scores-section"
+import { SessionHeader } from "@/components/sessions/session-header"
+import { SessionQuestionnairesSection } from "@/components/sessions/session-questionnaires-section"
+import type { SessionQuestionnaireRow } from "@/components/sessions/session-questionnaires-section"
+import { NotesSection } from "@/components/notes/notes-section"
+import { sessionTarget } from "@/components/notes/note-target"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import type { SeverityLevel } from "@/components/ui/severity-badge"
-import { Skeleton } from "@/components/ui/skeleton"
 
-const NarrativePanel = dynamic(
-  () =>
-    import("@/components/sessions/narrative-panel").then((m) => ({
-      default: m.NarrativePanel,
-    })),
-  {
-    loading: () => <Skeleton className="h-48 w-full rounded-lg" />,
-  },
-)
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string; sessionId: string }
+}): Promise<Metadata> {
+  const session = await getServerSession(authOptions)
+  if (!session) return { title: "Session" }
 
-function toSeverityLevel(severity: string | null): SeverityLevel | null {
-  if (severity === "critical" || severity === "high" || severity === "moderate") {
-    return severity
-  }
-  if (severity === "low") return "low"
-  return null
-}
+  const clinicalSession = await prisma.clinicalSession.findFirst({
+    where: {
+      id: params.sessionId,
+      patientId: params.id,
+      psychologistId: session.user.id,
+    },
+    select: { title: true },
+  })
 
-function buildItemLabelMap(
-  items: { order: number; text: string }[],
-): Record<string, string> {
-  return Object.fromEntries(
-    items.map((item) => [String(item.order), item.text]),
-  )
-}
-
-export const metadata: Metadata = {
-  title: "Session",
+  return { title: clinicalSession?.title ?? "Session" }
 }
 
 export default async function SessionDetailPage({
@@ -53,78 +42,89 @@ export default async function SessionDetailPage({
   const session = await getServerSession(authOptions)
   if (!session) redirect("/auth/signin")
 
-  const assessmentSession = await prisma.assessmentSession.findFirst({
+  const clinicalSession = await prisma.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
       psychologistId: session.user.id,
     },
     include: {
-      response: true,
-      patient: true,
-      scale: {
-        include: {
-          items: { orderBy: { order: "asc" } },
-        },
+      patient: { select: { anonymousId: true } },
+      questionnaires: {
+        include: { response: true, scale: true },
+        orderBy: { order: "asc" },
       },
     },
   })
 
-  if (!assessmentSession || !assessmentSession.response) notFound()
+  if (!clinicalSession) notFound()
 
-  const itemScores = assessmentSession.response.itemScores as Record<string, number>
-  const scaleEnum = scaleNameToEnum(assessmentSession.scale.name)
-  const alerts = computeAlerts(
-    scaleEnum,
-    assessmentSession.response.totalScore,
-    itemScores,
-    assessmentSession.response.severity,
+  const rows: SessionQuestionnaireRow[] = clinicalSession.questionnaires.map(
+    (q) => {
+      // Severity is recomputed from the raw item scores rather than trusted
+      // from storage, matching how every other surface reports it.
+      const severity = q.response
+        ? computeAlerts(
+            scaleNameToEnum(q.scale.name),
+            q.response.totalScore,
+            q.response.itemScores as Record<string, number>,
+            q.response.severity,
+          ).severity
+        : null
+
+      return {
+        id: q.id,
+        order: q.order,
+        scaleName: q.scale.name,
+        status: q.status,
+        score: q.response?.totalScore ?? null,
+        severity,
+      }
+    },
   )
 
-  const itemLabelMap = buildItemLabelMap(assessmentSession.scale.items)
-  const itemRows: ItemScoreRow[] = Object.entries(itemScores).map(([key, score]) => ({
-    key,
-    label: itemLabelMap[key] ?? `Item ${key}`,
-    score,
-    isSafetyItem: alerts.suicidalIdeation && key === "9",
-  }))
-
-  const severity = toSeverityLevel(alerts.severity)
+  const pendingCount = rows.filter((r) => r.status === "PENDING").length
+  const linkExpired = isTokenExpired(clinicalSession.tokenExpiresAt)
+  const noteTarget = sessionTarget(clinicalSession)
 
   return (
     <div className="flex flex-col gap-6">
-      <SessionDetailHeader
+      <SessionHeader
         patientId={params.id}
-        sessionId={assessmentSession.id}
-        anonymousId={assessmentSession.patient.anonymousId}
-        scaleName={assessmentSession.scale.name}
-        completedAt={assessmentSession.response.completedAt}
-        severity={severity}
+        sessionId={clinicalSession.id}
+        anonymousId={clinicalSession.patient.anonymousId}
+        title={clinicalSession.title}
+        reason={clinicalSession.reason}
+        scheduledAt={clinicalSession.scheduledAt}
+        status={clinicalSession.status}
+        token={clinicalSession.token}
+        linkExpired={linkExpired}
+        hasPendingQuestionnaires={pendingCount > 0}
       />
 
-      {alerts.suicidalIdeation && (
-        <Alert variant="destructive" role="alert">
-          <AlertTriangle />
-          <AlertTitle>Suicidal ideation endorsed</AlertTitle>
+      {linkExpired && pendingCount > 0 && (
+        <Alert>
+          <Link2Off />
+          <AlertTitle>This session&apos;s link has expired</AlertTitle>
           <AlertDescription>
-            Immediate clinical attention required. Review item scores and follow
-            your safety protocol.
+            {pendingCount} questionnaire{pendingCount === 1 ? "" : "s"} went
+            unanswered. Renew the link from the actions menu to send it again.
           </AlertDescription>
         </Alert>
       )}
 
-      <ScoreSummaryCard
-        totalScore={assessmentSession.response.totalScore}
-        severity={severity}
-        scaleName={assessmentSession.scale.name}
+      <SessionQuestionnairesSection
+        patientId={params.id}
+        sessionId={clinicalSession.id}
+        questionnaires={rows}
       />
 
-      <ItemScoresSection items={itemRows} />
-
-      <NarrativePanel
-        sessionId={assessmentSession.id}
+      <NotesSection
         patientId={params.id}
-        initialReviewed={!!assessmentSession.response.reviewedAt}
+        defaultTarget={noteTarget}
+        targets={[noteTarget]}
+        title="Session notes"
+        emptyDescription="Nothing recorded for this session yet."
       />
     </div>
   )

@@ -10,7 +10,7 @@ import { z } from 'zod'
 
 const BodySchema = z.object({
   patientId: z.string().min(1),
-  sessionId: z.string().min(1),
+  questionnaireId: z.string().min(1),
   regenerate: z.boolean().optional(),
 })
 
@@ -109,13 +109,12 @@ export async function POST(req: NextRequest) {
 
   const parsed = BodySchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
-  const { patientId, sessionId, regenerate } = parsed.data
+  const { patientId, questionnaireId, regenerate } = parsed.data
 
-  const assessmentSession = await prisma.assessmentSession.findFirst({
+  const questionnaire = await prisma.questionnaire.findFirst({
     where: {
-      id: sessionId,
-      patientId,
-      psychologistId: session.user.id,
+      id: questionnaireId,
+      session: { patientId, psychologistId: session.user.id },
     },
     include: {
       response: true,
@@ -123,15 +122,15 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  if (!assessmentSession?.response) {
+  if (!questionnaire?.response) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
   // Return the stored narrative unless a regeneration is requested
-  if (assessmentSession.response.narrative && !regenerate) {
+  if (questionnaire.response.narrative && !regenerate) {
     return NextResponse.json({
-      narrative: assessmentSession.response.narrative,
-      generatedAt: assessmentSession.response.narrativeGeneratedAt,
+      narrative: questionnaire.response.narrative,
+      generatedAt: questionnaire.response.narrativeGeneratedAt,
       cached: true,
     })
   }
@@ -149,33 +148,33 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const itemScores = assessmentSession.response.itemScores as Record<string, number>
+  const itemScores = questionnaire.response.itemScores as Record<string, number>
   const itemLabels = Object.fromEntries(
-    assessmentSession.scale.items.map((item) => [String(item.order), item.text]),
+    questionnaire.scale.items.map((item) => [String(item.order), item.text]),
   )
   const alerts = computeAlerts(
-    scaleNameToEnum(assessmentSession.scale.name),
-    assessmentSession.response.totalScore,
+    scaleNameToEnum(questionnaire.scale.name),
+    questionnaire.response.totalScore,
     itemScores,
-    assessmentSession.response.severity,
+    questionnaire.response.severity,
   )
   const itemLines = buildItemLines(itemScores, itemLabels)
 
-  const priorSessions = await prisma.assessmentSession.findMany({
+  const prior = await prisma.questionnaire.findMany({
     where: {
-      patientId,
-      scaleId: assessmentSession.scaleId,
+      session: { patientId },
+      scaleId: questionnaire.scaleId,
       status: 'COMPLETED',
-      id: { not: assessmentSession.id },
+      id: { not: questionnaire.id },
       response: { isNot: null },
     },
     include: { response: { select: { totalScore: true, severity: true, completedAt: true } } },
     orderBy: { createdAt: 'desc' },
     take: 8,
   })
-  const history = priorSessions
+  const history = prior
     .map((s) => s.response!)
-    .filter((r) => r.completedAt < assessmentSession.response!.completedAt)
+    .filter((r) => r.completedAt < questionnaire.response!.completedAt)
     .reverse()
   const historyBlock = buildHistoryBlock(history)
 
@@ -189,9 +188,9 @@ export async function POST(req: NextRequest) {
       {
         role: 'user',
         content: buildPrompt({
-          scaleName: assessmentSession.scale.name,
-          totalScore: assessmentSession.response.totalScore,
-          severity: assessmentSession.response.severity,
+          scaleName: questionnaire.scale.name,
+          totalScore: questionnaire.response.totalScore,
+          severity: questionnaire.response.severity,
           itemLines,
           historyBlock,
           suicidalIdeation: alerts.suicidalIdeation,
@@ -222,7 +221,7 @@ export async function POST(req: NextRequest) {
 
   const generatedAt = new Date()
   await prisma.questionnaireResponse.update({
-    where: { sessionId },
+    where: { questionnaireId },
     data: { narrative, narrativeGeneratedAt: generatedAt },
   })
 

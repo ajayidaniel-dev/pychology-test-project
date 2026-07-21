@@ -4,6 +4,10 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
 import { nextAnonymousId } from '@/lib/anonymous-id'
+import {
+  PATIENT_QUESTIONNAIRES_INCLUDE,
+  flattenQuestionnaires,
+} from '@/lib/patient-summary'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -11,16 +15,16 @@ export async function GET() {
 
   const patients = await prisma.patient.findMany({
     where: { psychologistId: session.user.id },
-    include: {
-      assessmentSessions: {
-        include: { response: true },
-        orderBy: { createdAt: 'desc' },
-      },
-    },
+    include: PATIENT_QUESTIONNAIRES_INCLUDE,
     orderBy: { createdAt: 'desc' },
   })
 
-  return NextResponse.json(patients)
+  return NextResponse.json(
+    patients.map((p) => ({
+      ...p,
+      questionnaires: flattenQuestionnaires(p.clinicalSessions),
+    })),
+  )
 }
 
 const CreatePatientSchema = z.object({

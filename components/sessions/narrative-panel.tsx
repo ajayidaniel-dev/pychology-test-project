@@ -32,6 +32,7 @@ import type { ClinicalNarrative } from "@/app/api/narrative/route"
 
 interface Props {
   sessionId: string
+  questionnaireId: string
   patientId: string
   initialReviewed?: boolean
 }
@@ -86,6 +87,7 @@ function Section({
 
 export function NarrativePanel({
   sessionId,
+  questionnaireId,
   patientId,
   initialReviewed = false,
 }: Props) {
@@ -117,7 +119,7 @@ export function NarrativePanel({
         const res = await fetch("/api/narrative", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ patientId, sessionId, regenerate }),
+          body: JSON.stringify({ patientId, questionnaireId, regenerate }),
         })
         const data = await res.json().catch(() => null)
         if (!res.ok || !data) {
@@ -132,7 +134,7 @@ export function NarrativePanel({
         setRegenerating(false)
       }
     },
-    [patientId, sessionId],
+    [patientId, questionnaireId],
   )
 
   useEffect(() => {
@@ -141,11 +143,14 @@ export function NarrativePanel({
 
   async function markReviewed() {
     setSavingReview(true)
-    const res = await fetch(`/api/patients/${patientId}/sessions/${sessionId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reviewed" }),
-    })
+    const res = await fetch(
+      `/api/patients/${patientId}/sessions/${sessionId}/questionnaires/${questionnaireId}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reviewed" }),
+      },
+    )
     setSavingReview(false)
 
     if (!res.ok) {
@@ -173,7 +178,7 @@ export function NarrativePanel({
       const res = await fetch("/api/narrative/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patientId, sessionId, messages: nextMessages }),
+        body: JSON.stringify({ patientId, questionnaireId, messages: nextMessages }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.reply) {

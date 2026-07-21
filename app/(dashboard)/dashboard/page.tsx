@@ -16,6 +16,8 @@ import {
   toCaseloadPatient,
   bySeverityThenRecency,
   scaleNameToEnum,
+  PATIENT_QUESTIONNAIRES_INCLUDE,
+  flattenQuestionnaires,
 } from "@/lib/patient-summary"
 import { computeAlerts } from "@/lib/alert-rules"
 
@@ -25,51 +27,50 @@ export default async function DashboardPage() {
 
   const patients = await prisma.patient.findMany({
     where: { psychologistId: session.user.id },
-    include: {
-      assessmentSessions: {
-        include: { response: true, scale: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    include: PATIENT_QUESTIONNAIRES_INCLUDE,
   })
 
-  const allSessions = patients.flatMap((p) =>
-    p.assessmentSessions.map((s) => ({
-      ...s,
+  const allQuestionnaires = patients.flatMap((p) =>
+    flattenQuestionnaires(p.clinicalSessions).map((q) => ({
+      ...q,
+      patientId: p.id,
       patient: { anonymousId: p.anonymousId },
     })),
   )
 
-  const completedSessions = allSessions.filter(
-    (s) => s.status === "COMPLETED" && s.response,
+  const completed = allQuestionnaires.filter(
+    (q) => q.status === "COMPLETED" && q.response,
   )
-  const pendingSessions = allSessions.filter((s) => s.status === "PENDING").length
+  const pendingQuestionnaires = allQuestionnaires.filter(
+    (q) => q.status === "PENDING",
+  ).length
 
   // Alerts reflect current state: only the latest completed assessment per
   // patient + scale. Superseded results belong on the patient page, not here.
-  const latestByPatientScale = new Map<string, (typeof completedSessions)[number]>()
-  for (const s of completedSessions) {
-    const key = `${s.patientId}:${s.scaleId}`
+  const latestByPatientScale = new Map<string, (typeof completed)[number]>()
+  for (const q of completed) {
+    const key = `${q.patientId}:${q.scaleId}`
     const prev = latestByPatientScale.get(key)
     if (
       !prev ||
-      (s.response!.completedAt?.getTime() ?? 0) >
+      (q.response!.completedAt?.getTime() ?? 0) >
         (prev.response!.completedAt?.getTime() ?? 0)
     ) {
-      latestByPatientScale.set(key, s)
+      latestByPatientScale.set(key, q)
     }
   }
   const currentSessions = [...latestByPatientScale.values()]
 
-  const alertFeedSessions = currentSessions.map((s) => ({
-    id: s.id,
-    patientId: s.patientId,
-    patient: s.patient,
-    scale: scaleNameToEnum(s.scale.name),
-    scaleName: s.scale.name,
-    response: s.response,
-    storedSeverity: s.response?.severity,
-    completedAt: s.response?.completedAt ?? null,
+  const alertFeedSessions = currentSessions.map((q) => ({
+    id: q.id,
+    sessionId: q.sessionId,
+    patientId: q.patientId,
+    patient: q.patient,
+    scale: scaleNameToEnum(q.scale.name),
+    scaleName: q.scale.name,
+    response: q.response,
+    storedSeverity: q.response?.severity,
+    completedAt: q.response?.completedAt ?? null,
   }))
 
   const alertCounts = currentSessions.reduce(
@@ -89,7 +90,12 @@ export default async function DashboardPage() {
     { open: 0, critical: 0 },
   )
 
-  const caseloadPatients = shapePatientList(patients)
+  const caseloadPatients = shapePatientList(
+    patients.map((p) => ({
+      ...p,
+      questionnaires: flattenQuestionnaires(p.clinicalSessions),
+    })),
+  )
     .map(toCaseloadPatient)
     .sort(bySeverityThenRecency)
 
@@ -107,7 +113,7 @@ export default async function DashboardPage() {
           totalPatients: patients.length,
           openAlerts: alertCounts.open,
           criticalAlerts: alertCounts.critical,
-          pendingSessions,
+          pendingSessions: pendingQuestionnaires,
         }}
       />
 

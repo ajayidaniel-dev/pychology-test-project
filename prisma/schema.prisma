@@ -51,25 +51,26 @@ model User {
   verificationToken       String?             @unique
   verificationTokenExpiry DateTime?
   accounts                Account[]
-  assessmentSessions      AssessmentSession[]
+  clinicalSessions        ClinicalSession[]
   patients                Patient[]
   scales                  Scale[]
   sessions                Session[]
+  notes                   Note[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
 }
 
 model Scale {
-  id                 String              @id @default(cuid())
-  name               String
-  description        String?
-  psychologistId     String?
-  isLibrary          Boolean             @default(false)
-  createdAt          DateTime            @default(now())
-  assessmentSessions AssessmentSession[]
-  psychologist       User?               @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  items              ScaleItem[]
-  thresholds         SeverityThreshold[]
+  id             String              @id @default(cuid())
+  name           String
+  description    String?
+  psychologistId String?
+  isLibrary      Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  questionnaires Questionnaire[]
+  psychologist   User?               @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  items          ScaleItem[]
+  thresholds     SeverityThreshold[]
 }
 
 model ScaleItem {
@@ -118,43 +119,96 @@ model Patient {
   summaryGeneratedAt  DateTime?
   summarySessionCount Int?
   createdAt          DateTime            @default(now())
-  assessmentSessions AssessmentSession[]
+  clinicalSessions   ClinicalSession[]
+  notes              Note[]
+  notifications      Notification[]
   psychologist       User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
   @@unique([anonymousId, psychologistId])
 }
 
-model AssessmentSession {
-  id                   String            @id @default(cuid())
-  patientId            String
-  psychologistId       String
-  scaleId              String
-  status               SessionStatus     @default(PENDING)
-  token                String            @unique
+/// A clinical session is an appointment: a patient, a date, and a reason.
+/// Questionnaires hang off it — a session is not itself a questionnaire.
+/// The fill link is session-level, so one link walks the patient through every
+/// questionnaire attached to that session.
+model ClinicalSession {
+  id             String                @id @default(cuid())
+  patientId      String
+  psychologistId String
+  title          String
+  reason         String?
+  scheduledAt    DateTime
+  status         ClinicalSessionStatus @default(SCHEDULED)
+
+  token                String    @unique
   tokenExpiresAt       DateTime
-  collectDetails       Boolean           @default(false)
+  collectDetails       Boolean   @default(false)
   consentAt            DateTime?
   consentPolicyVersion String?
-  createdAt            DateTime          @default(now())
-  patient        Patient                @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  psychologist   User                   @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  scale          Scale                  @relation(fields: [scaleId], references: [id])
-  response       QuestionnaireResponse?
+
+  createdAt      DateTime        @default(now())
+  patient        Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  psychologist   User            @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  questionnaires Questionnaire[]
+  notes          Note[]
+  notifications  Notification[]
+
+  @@index([patientId, scheduledAt])
+}
+
+model Questionnaire {
+  id        String              @id @default(cuid())
+  sessionId String
+  scaleId   String
+  order     Int                 @default(1)
+  status    QuestionnaireStatus @default(PENDING)
+  createdAt DateTime            @default(now())
+
+  session  ClinicalSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scale    Scale                  @relation(fields: [scaleId], references: [id])
+  response      QuestionnaireResponse?
+  notes         Note[]
+  notifications Notification[]
+
+  @@index([sessionId, order])
 }
 
 model QuestionnaireResponse {
-  id           String            @id @default(cuid())
-  sessionId    String            @unique
-  itemScores   Json
-  intakeAnswers Json?
-  totalScore   Int
-  severity     String
-  completedAt  DateTime          @default(now())
-  reviewedAt   DateTime?
-  escalatedAt  DateTime?
+  id              String        @id @default(cuid())
+  questionnaireId String        @unique
+  itemScores      Json
+  intakeAnswers   Json?
+  totalScore      Int
+  severity        String
+  completedAt     DateTime      @default(now())
+  reviewedAt      DateTime?
+  escalatedAt     DateTime?
   narrative            Json?
   narrativeGeneratedAt DateTime?
-  session      AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionnaire   Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+}
+
+/// One note table for all three levels. patientId is always set so the patient
+/// page can render a single chronological stream; sessionId/questionnaireId
+/// narrow what the note is attached to.
+model Note {
+  id              String   @id @default(cuid())
+  authorId        String
+  patientId       String
+  sessionId       String?
+  questionnaireId String?
+  body            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  author        User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  session       ClinicalSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionnaire Questionnaire?   @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, createdAt])
+  @@index([sessionId])
+  @@index([questionnaireId])
 }
 
 enum ItemType {
@@ -164,10 +218,16 @@ enum ItemType {
   NUMBER
 }
 
-enum SessionStatus {
+enum QuestionnaireStatus {
   PENDING
   COMPLETED
   EXPIRED
+}
+
+enum ClinicalSessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
 }
 
 enum NotificationType {
@@ -189,12 +249,21 @@ model Notification {
   body      String
   href      String?
   patientId String?
-  sessionId String?
+  // sessionId is the ClinicalSession; questionnaireId narrows to one
+  // questionnaire within it. Link-expiry alerts are session-level (the token
+  // lives there), completion/severity alerts are questionnaire-level.
+  sessionId       String?
+  questionnaireId String?
   dedupeKey String
   readAt    DateTime?
   createdAt DateTime         @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Cascades keep the bell honest: a notification must never outlive the thing
+  // it links to, or clicking it lands on a 404.
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient       Patient?         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  session       ClinicalSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionnaire Questionnaire?   @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dedupeKey])
   @@index([userId, readAt, createdAt])

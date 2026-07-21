@@ -1,6 +1,6 @@
 import { NotificationType } from "@prisma/client"
 import {
-  buildSessionSubmitNotifications,
+  buildQuestionnaireSubmitNotifications,
   loginDedupeKey,
   LINK_EXPIRING_WINDOW_MS,
 } from "@/lib/notifications"
@@ -18,9 +18,11 @@ jest.mock("@/lib/prisma", () => ({
     notificationPreference: {
       findUnique: jest.fn(),
     },
-    assessmentSession: {
+    clinicalSession: {
       findMany: jest.fn(),
-      update: jest.fn(),
+    },
+    questionnaire: {
+      updateMany: jest.fn(),
     },
   },
 }))
@@ -29,8 +31,9 @@ import prisma from "@/lib/prisma"
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>
 
-describe("buildSessionSubmitNotifications", () => {
+describe("buildQuestionnaireSubmitNotifications", () => {
   const baseCtx = {
+    questionnaireId: "q-1",
     sessionId: "sess-1",
     patientId: "pat-1",
     psychologistId: "user-1",
@@ -42,22 +45,27 @@ describe("buildSessionSubmitNotifications", () => {
   }
 
   it("creates completed, SI, critical, and unreviewed for PHQ-9 SI + critical score", () => {
-    const result = buildSessionSubmitNotifications(baseCtx)
-    const types = result.map((n) => n.type)
+    const result = buildQuestionnaireSubmitNotifications(baseCtx)
+    const types = result.map((n: { type: NotificationType }) => n.type)
 
     expect(types).toContain(NotificationType.QUESTIONNAIRE_COMPLETED)
     expect(types).toContain(NotificationType.SUICIDAL_IDEATION)
     expect(types).toContain(NotificationType.SEVERITY_CRITICAL)
     expect(types).toContain(NotificationType.UNREVIEWED_SEVERE)
 
-    const si = result.find((n) => n.type === NotificationType.SUICIDAL_IDEATION)
+    const si = result.find(
+      (n: { type: NotificationType }) =>
+        n.type === NotificationType.SUICIDAL_IDEATION,
+    )
     expect(si?.title).toBe("Suicidal ideation endorsed")
-    expect(si?.href).toBe("/patients/pat-1/sessions/sess-1")
+    expect(si?.href).toBe(
+      "/patients/pat-1/sessions/sess-1/questionnaires/q-1",
+    )
   })
 
   it("uses unique dedupe keys per notification type", () => {
-    const result = buildSessionSubmitNotifications(baseCtx)
-    const keys = result.map((n) => n.dedupeKey)
+    const result = buildQuestionnaireSubmitNotifications(baseCtx)
+    const keys = result.map((n: { dedupeKey: string }) => n.dedupeKey)
     expect(new Set(keys).size).toBe(keys.length)
   })
 })
@@ -75,6 +83,7 @@ describe("createNotification dedupe", () => {
       href: null,
       patientId: null,
       sessionId: null,
+      questionnaireId: null,
       dedupeKey: "login:user-1:2026-07-06",
       readAt: null,
       createdAt: new Date(),
@@ -118,6 +127,7 @@ describe("createLoginNotification", () => {
       href: null,
       patientId: null,
       sessionId: null,
+      questionnaireId: null,
       dedupeKey: loginDedupeKey("user-1"),
       readAt: null,
       createdAt: new Date(),
@@ -150,25 +160,29 @@ describe("reconcileOperationalNotifications", () => {
     jest.clearAllMocks()
     mockPrisma.notificationPreference.findUnique.mockResolvedValue(null)
     mockPrisma.notification.upsert.mockResolvedValue({} as never)
-    mockPrisma.assessmentSession.update.mockResolvedValue({} as never)
+    mockPrisma.questionnaire.updateMany.mockResolvedValue({} as never)
   })
 
   it("creates expiring and expired link notifications", async () => {
     const now = Date.now()
-    mockPrisma.assessmentSession.findMany.mockResolvedValue([
+    mockPrisma.clinicalSession.findMany.mockResolvedValue([
       {
         id: "sess-expired",
         patientId: "pat-1",
+        title: "Intake",
+        status: "SCHEDULED",
         tokenExpiresAt: new Date(now - 1000),
         patient: { anonymousId: "PT-001" },
-        scale: { name: "GAD-7" },
+        questionnaires: [{ scale: { name: "GAD-7" } }],
       },
       {
         id: "sess-expiring",
         patientId: "pat-2",
+        title: "Week 4 review",
+        status: "SCHEDULED",
         tokenExpiresAt: new Date(now + LINK_EXPIRING_WINDOW_MS / 2),
         patient: { anonymousId: "PT-002" },
-        scale: { name: "PHQ-9" },
+        questionnaires: [{ scale: { name: "PHQ-9" } }],
       },
     ] as never)
 
@@ -187,8 +201,10 @@ describe("reconcileOperationalNotifications", () => {
       }),
     )
 
-    expect(mockPrisma.assessmentSession.update).toHaveBeenCalledWith({
-      where: { id: "sess-expired" },
+    // Expiry now knocks out the session's outstanding questionnaires, since
+    // the token that gated them lives on the session.
+    expect(mockPrisma.questionnaire.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: "sess-expired", status: "PENDING" },
       data: { status: "EXPIRED" },
     })
 
@@ -204,7 +220,7 @@ describe("reconcileOperationalNotifications", () => {
 })
 
 describe("resolveNotificationHref", () => {
-  it("falls back to session page when href is missing", async () => {
+  it("falls back to the questionnaire page when href is missing", async () => {
     const { resolveNotificationHref } = await import("@/lib/notifications")
 
     expect(
@@ -213,11 +229,12 @@ describe("resolveNotificationHref", () => {
         href: null,
         patientId: "pat-1",
         sessionId: "sess-1",
+        questionnaireId: "q-1",
       }),
-    ).toBe("/patients/pat-1/sessions/sess-1")
+    ).toBe("/patients/pat-1/sessions/sess-1/questionnaires/q-1")
   })
 
-  it("falls back to patient page for link notifications", async () => {
+  it("falls back to the session page for link notifications", async () => {
     const { resolveNotificationHref } = await import("@/lib/notifications")
 
     expect(
@@ -226,8 +243,9 @@ describe("resolveNotificationHref", () => {
         href: null,
         patientId: "pat-1",
         sessionId: "sess-1",
+        questionnaireId: null,
       }),
-    ).toBe("/patients/pat-1")
+    ).toBe("/patients/pat-1/sessions/sess-1")
   })
 
   it("returns null for login notifications", async () => {
@@ -239,6 +257,7 @@ describe("resolveNotificationHref", () => {
         href: null,
         patientId: null,
         sessionId: null,
+        questionnaireId: null,
       }),
     ).toBeNull()
   })

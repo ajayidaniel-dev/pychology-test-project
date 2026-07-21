@@ -5,9 +5,14 @@ import { redirect, notFound } from "next/navigation"
 import { AlertTriangle } from "lucide-react"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { isTokenExpired } from "@/lib/token"
 import { NewSessionDialog } from "@/components/sessions/new-session-dialog"
 import { computeAlerts } from "@/lib/alert-rules"
-import { scaleNameToEnum } from "@/lib/patient-summary"
+import {
+  flattenQuestionnaires,
+  PATIENT_QUESTIONNAIRES_INCLUDE,
+  scaleNameToEnum,
+} from "@/lib/patient-summary"
 import { computeChartTrend, TREND_LABELS } from "@/lib/chart-trend"
 import { PatientActions } from "@/components/patients/patient-actions"
 import { PatientDetailsCard } from "@/components/patients/patient-details-card"
@@ -16,6 +21,14 @@ import { PatientSummaryCard } from "@/components/patients/patient-summary-card"
 import type { PatientSummary } from "@/lib/patient-summary-ai"
 import type { IntakeAnswers } from "@/lib/consent"
 import { PatientSessionsSection } from "@/components/patients/patient-sessions-section"
+import type { PatientSessionRow } from "@/components/patients/patient-sessions-section"
+import { NotesSection } from "@/components/notes/notes-section"
+import {
+  PATIENT_TARGET,
+  questionnaireTarget,
+  sessionTarget,
+  type NoteTarget,
+} from "@/components/notes/note-target"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -74,26 +87,24 @@ export default async function PatientProfilePage({
 
   const patient = await prisma.patient.findFirst({
     where: { id: params.id, psychologistId: session.user.id },
-    include: {
-      assessmentSessions: {
-        include: { response: true, scale: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    include: PATIENT_QUESTIONNAIRES_INCLUDE,
   })
 
   if (!patient) notFound()
 
-  const completed = patient.assessmentSessions.filter((s) => s.response)
+  // Charts, alerts and the summary all reason about questionnaires in
+  // completion order, so flatten them out of their sessions first.
+  const questionnaires = flattenQuestionnaires(patient.clinicalSessions)
+  const completed = questionnaires.filter((q) => q.response)
   const latest = completed.at(-1)
 
   const latestScaleId = latest?.scaleId
-  const chartSessions = latestScaleId
-    ? completed.filter((s) => s.scaleId === latestScaleId)
+  const chartQuestionnaires = latestScaleId
+    ? completed.filter((q) => q.scaleId === latestScaleId)
     : completed
-  const chartData = chartSessions.map((s, i) => ({
+  const chartData = chartQuestionnaires.map((q, i) => ({
     session: i + 1,
-    score: s.response!.totalScore,
+    score: q.response!.totalScore,
   }))
   const trend = computeChartTrend(chartData)
 
@@ -110,25 +121,42 @@ export default async function PatientProfilePage({
     ? toSeverityLevel(latestAlerts.severity)
     : null
 
-  const latestConsented = [...patient.assessmentSessions]
+  const latestConsented = [...patient.clinicalSessions]
     .reverse()
     .find((s) => s.consentAt)
   const latestIntake =
     ([...completed]
       .reverse()
-      .find((s) => s.response?.intakeAnswers)?.response
+      .find((q) => q.response?.intakeAnswers)?.response
       ?.intakeAnswers as IntakeAnswers | null) ?? null
   const patientHasDetails = Boolean(patient.fullName && patient.email)
 
-  const sessionRows = patient.assessmentSessions.map((s, i) => ({
+  // Newest session first: the appointment a clinician is most likely acting on.
+  const orderedSessions = [...patient.clinicalSessions].reverse()
+
+  const sessionRows: PatientSessionRow[] = orderedSessions.map((s) => ({
     id: s.id,
-    index: i + 1,
-    scaleName: s.scale.name,
+    title: s.title,
+    reason: s.reason,
+    scheduledAt: s.scheduledAt,
     status: s.status,
-    score: s.response?.totalScore ?? null,
-    severity: s.response?.severity ?? null,
+    questionnaireCount: s.questionnaires.length,
+    completedCount: s.questionnaires.filter((q) => q.status === "COMPLETED")
+      .length,
+    scaleNames: s.questionnaires.map((q) => q.scale.name),
     token: s.token,
+    linkExpired: isTokenExpired(s.tokenExpiresAt),
   }))
+
+  // The composer can file a note against the patient, any session, or any
+  // questionnaire, so the whole tree becomes selectable targets.
+  const noteTargets: NoteTarget[] = [
+    PATIENT_TARGET,
+    ...orderedSessions.flatMap((s) => [
+      sessionTarget(s),
+      ...s.questionnaires.map((q) => questionnaireTarget(q, s)),
+    ]),
+  ]
 
   return (
     <div className="flex flex-col gap-6">
@@ -179,7 +207,7 @@ export default async function PatientProfilePage({
                 Score History — {latest.scale.name}
               </CardTitle>
               <CardDescription>
-                Sessions on the same scale for comparable scores
+                Assessments on the same scale for comparable scores
               </CardDescription>
             </div>
             <Badge variant="outline">{TREND_LABELS[trend]}</Badge>
@@ -204,9 +232,13 @@ export default async function PatientProfilePage({
         intake={latestIntake}
       />
 
-      <PatientSessionsSection
+      <PatientSessionsSection patientId={patient.id} sessions={sessionRows} />
+
+      <NotesSection
         patientId={patient.id}
-        sessions={sessionRows}
+        defaultTarget={PATIENT_TARGET}
+        targets={noteTargets}
+        emptyDescription="Nothing recorded yet. Notes can be filed against the patient, a session, or a single questionnaire."
       />
     </div>
   )

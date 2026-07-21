@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma'
 import { callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
 import { computeAlerts, getScaleMeta } from '@/lib/alert-rules'
-import { scaleNameToEnum } from '@/lib/patient-summary'
+import { flattenQuestionnaires, scaleNameToEnum } from '@/lib/patient-summary'
 import type { ClinicalNarrative } from '@/app/api/narrative/route'
 import type { IntakeAnswers } from '@/lib/consent'
 import { z } from 'zod'
@@ -190,17 +190,24 @@ export async function generateAndStorePatientSummary(
   const patient = await prisma.patient.findUnique({
     where: { id: patientId },
     include: {
-      assessmentSessions: {
-        where: { status: 'COMPLETED', response: { isNot: null } },
-        include: { response: true, scale: true },
-        orderBy: { createdAt: 'asc' },
+      clinicalSessions: {
+        include: {
+          questionnaires: {
+            where: { status: 'COMPLETED', response: { isNot: null } },
+            include: { response: true, scale: true },
+            orderBy: { order: 'asc' },
+          },
+        },
+        orderBy: { scheduledAt: 'asc' },
       },
     },
   })
 
   if (!patient) return { ok: false, reason: 'patient-not-found' }
 
-  const completed = patient.assessmentSessions.filter((s) => s.response)
+  const completed = flattenQuestionnaires(patient.clinicalSessions).filter(
+    (q) => q.response,
+  )
   if (completed.length === 0) return { ok: false, reason: 'no-completed-sessions' }
 
   const apiKey = process.env.ANTHROPIC_API_KEY

@@ -11,9 +11,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const patient = await prisma.patient.findFirst({
     where: { id: params.id, psychologistId: session.user.id },
     include: {
-      assessmentSessions: {
-        include: { response: true },
-        orderBy: { createdAt: 'asc' },
+      clinicalSessions: {
+        include: {
+          questionnaires: {
+            include: { response: true, scale: { select: { id: true, name: true } } },
+            orderBy: { order: 'asc' },
+          },
+        },
+        orderBy: { scheduledAt: 'asc' },
       },
     },
   })

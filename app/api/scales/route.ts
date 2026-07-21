@@ -16,7 +16,7 @@ export async function GET() {
       ],
     },
     include: {
-      _count: { select: { items: true, assessmentSessions: true } },
+      _count: { select: { items: true, questionnaires: true } },
     },
     orderBy: [{ isLibrary: 'desc' }, { createdAt: 'asc' }],
   })

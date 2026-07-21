@@ -19,12 +19,48 @@ function toSeverityLevel(severity: string | null): SeverityLevel | null {
   return null
 }
 
+/**
+ * Prisma include that reaches a patient's questionnaires through their
+ * clinical sessions. Pair it with `flattenQuestionnaires` when you want the
+ * flat chronological list the shaping helpers below expect.
+ */
+export const PATIENT_QUESTIONNAIRES_INCLUDE = {
+  clinicalSessions: {
+    include: {
+      questionnaires: {
+        include: { response: true, scale: true },
+        orderBy: { order: "asc" },
+      },
+    },
+    orderBy: { scheduledAt: "asc" },
+  },
+} as const
+
+/**
+ * Questionnaires now live one level down, inside sessions. Flatten them back
+ * into a single chronological list — ordered by when the patient actually
+ * completed each one, falling back to the session's date for pending ones.
+ */
+export function flattenQuestionnaires<
+  Q extends { response: { completedAt?: Date | null } | null },
+>(sessions: Array<{ scheduledAt: Date; questionnaires: Q[] }>): Q[] {
+  return sessions
+    .flatMap((s) =>
+      s.questionnaires.map((q) => ({
+        q,
+        at: q.response?.completedAt ?? s.scheduledAt,
+      })),
+    )
+    .sort((a, b) => a.at.getTime() - b.at.getTime())
+    .map((entry) => entry.q)
+}
+
 export interface PatientWithSessions {
   id: string
   anonymousId: string
   displayName: string | null
   createdAt: Date
-  assessmentSessions: Array<{
+  questionnaires: Array<{
     response: {
       totalScore: number
       itemScores: unknown
@@ -52,7 +88,7 @@ export interface PatientListItem {
 }
 
 export function shapePatientListItem(patient: PatientWithSessions): PatientListItem {
-  const completed = patient.assessmentSessions.filter((s) => s.response)
+  const completed = patient.questionnaires.filter((s) => s.response)
   const latest = completed.at(-1)
   let severity: SeverityLevel | null = null
 

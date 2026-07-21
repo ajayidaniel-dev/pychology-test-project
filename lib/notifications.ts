@@ -27,9 +27,11 @@ export interface CreateNotificationInput {
   href?: string | null
   patientId?: string | null
   sessionId?: string | null
+  questionnaireId?: string | null
 }
 
-export interface SessionSubmitContext {
+export interface QuestionnaireSubmitContext {
+  questionnaireId: string
   sessionId: string
   patientId: string
   psychologistId: string
@@ -40,8 +42,8 @@ export interface SessionSubmitContext {
   storedSeverity: string
 }
 
-export function buildSessionSubmitNotifications(
-  ctx: SessionSubmitContext,
+export function buildQuestionnaireSubmitNotifications(
+  ctx: QuestionnaireSubmitContext,
 ): CreateNotificationInput[] {
   const scale = scaleNameToEnum(ctx.scaleName)
   const alerts = computeAlerts(
@@ -50,19 +52,21 @@ export function buildSessionSubmitNotifications(
     ctx.itemScores,
     ctx.storedSeverity,
   )
-  const href = `/patients/${ctx.patientId}/sessions/${ctx.sessionId}`
+  const href = `/patients/${ctx.patientId}/sessions/${ctx.sessionId}/questionnaires/${ctx.questionnaireId}`
   const base = {
     userId: ctx.psychologistId,
     patientId: ctx.patientId,
     sessionId: ctx.sessionId,
+    questionnaireId: ctx.questionnaireId,
     href,
   }
+  const key = ctx.questionnaireId
 
   const notifications: CreateNotificationInput[] = [
     {
       ...base,
       type: NotificationType.QUESTIONNAIRE_COMPLETED,
-      dedupeKey: `session:${ctx.sessionId}:completed`,
+      dedupeKey: `questionnaire:${key}:completed`,
       title: "Questionnaire completed",
       body: `${ctx.anonymousId} completed ${ctx.scaleName}.`,
     },
@@ -72,7 +76,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.SUICIDAL_IDEATION,
-      dedupeKey: `session:${ctx.sessionId}:si`,
+      dedupeKey: `questionnaire:${key}:si`,
       title: "Suicidal ideation endorsed",
       body: `${ctx.anonymousId} endorsed suicidal ideation on ${ctx.scaleName}. Immediate review required.`,
     })
@@ -82,7 +86,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.SEVERITY_CRITICAL,
-      dedupeKey: `session:${ctx.sessionId}:critical`,
+      dedupeKey: `questionnaire:${key}:critical`,
       title: "Critical severity result",
       body: `${ctx.anonymousId} scored ${ctx.totalScore} on ${ctx.scaleName} (critical).`,
     })
@@ -90,7 +94,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.SEVERITY_HIGH,
-      dedupeKey: `session:${ctx.sessionId}:high`,
+      dedupeKey: `questionnaire:${key}:high`,
       title: "High severity result",
       body: `${ctx.anonymousId} scored ${ctx.totalScore} on ${ctx.scaleName} (high).`,
     })
@@ -104,7 +108,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.UNREVIEWED_SEVERE,
-      dedupeKey: `session:${ctx.sessionId}:unreviewed`,
+      dedupeKey: `questionnaire:${key}:unreviewed`,
       title: "Unreviewed assessment",
       body: `${ctx.anonymousId}'s ${ctx.scaleName} result needs clinical review.`,
     })
@@ -113,7 +117,7 @@ export function buildSessionSubmitNotifications(
   return notifications
 }
 
-const SESSION_LINK_TYPES = new Set<NotificationType>([
+const QUESTIONNAIRE_LINK_TYPES = new Set<NotificationType>([
   NotificationType.QUESTIONNAIRE_COMPLETED,
   NotificationType.SEVERITY_CRITICAL,
   NotificationType.SEVERITY_HIGH,
@@ -121,27 +125,33 @@ const SESSION_LINK_TYPES = new Set<NotificationType>([
   NotificationType.UNREVIEWED_SEVERE,
 ])
 
-const PATIENT_LINK_TYPES = new Set<NotificationType>([
+const SESSION_LINK_TYPES = new Set<NotificationType>([
   NotificationType.LINK_EXPIRING_SOON,
   NotificationType.LINK_EXPIRED,
 ])
 
 export function resolveNotificationHref(
-  item: Pick<Notification, "type" | "href" | "patientId" | "sessionId">,
+  item: Pick<
+    Notification,
+    "type" | "href" | "patientId" | "sessionId" | "questionnaireId"
+  >,
 ): string | null {
   if (item.href) return item.href
 
   if (
+    item.questionnaireId &&
     item.sessionId &&
     item.patientId &&
-    SESSION_LINK_TYPES.has(item.type)
+    QUESTIONNAIRE_LINK_TYPES.has(item.type)
   ) {
+    return `/patients/${item.patientId}/sessions/${item.sessionId}/questionnaires/${item.questionnaireId}`
+  }
+
+  if (item.sessionId && item.patientId && SESSION_LINK_TYPES.has(item.type)) {
     return `/patients/${item.patientId}/sessions/${item.sessionId}`
   }
 
-  if (item.patientId && PATIENT_LINK_TYPES.has(item.type)) {
-    return `/patients/${item.patientId}`
-  }
+  if (item.patientId) return `/patients/${item.patientId}`
 
   return null
 }
@@ -187,20 +197,22 @@ export async function createNotification(
       href: data.href ?? null,
       patientId: data.patientId ?? null,
       sessionId: data.sessionId ?? null,
+      questionnaireId: data.questionnaireId ?? null,
       dedupeKey: data.dedupeKey,
     },
     update: {
       href: data.href ?? undefined,
       patientId: data.patientId ?? undefined,
       sessionId: data.sessionId ?? undefined,
+      questionnaireId: data.questionnaireId ?? undefined,
     },
   })
 }
 
-export async function createSessionSubmitNotifications(
-  ctx: SessionSubmitContext,
+export async function createQuestionnaireSubmitNotifications(
+  ctx: QuestionnaireSubmitContext,
 ): Promise<void> {
-  const payloads = buildSessionSubmitNotifications(ctx)
+  const payloads = buildQuestionnaireSubmitNotifications(ctx)
   await Promise.all(payloads.map((payload) => createNotification(payload)))
 }
 
@@ -214,12 +226,12 @@ export async function createLoginNotification(userId: string): Promise<void> {
   })
 }
 
-export async function resolveUnreviewedForSession(
-  sessionId: string,
+export async function resolveUnreviewedForQuestionnaire(
+  questionnaireId: string,
 ): Promise<void> {
   await prisma.notification.deleteMany({
     where: {
-      sessionId,
+      questionnaireId,
       type: NotificationType.UNREVIEWED_SEVERE,
     },
   })
@@ -229,51 +241,62 @@ export async function reconcileOperationalNotifications(
   userId: string,
 ): Promise<void> {
   const now = Date.now()
-  const pendingSessions = await prisma.assessmentSession.findMany({
+  // The fill token is session-level now, so link expiry is judged per session.
+  // Only sessions still waiting on at least one questionnaire are at stake.
+  const openSessions = await prisma.clinicalSession.findMany({
     where: {
       psychologistId: userId,
-      status: "PENDING",
+      status: { not: "CANCELLED" },
+      questionnaires: { some: { status: "PENDING" } },
     },
     include: {
       patient: { select: { anonymousId: true } },
-      scale: { select: { name: true } },
+      questionnaires: {
+        where: { status: "PENDING" },
+        select: { scale: { select: { name: true } } },
+        orderBy: { order: "asc" },
+      },
     },
   })
 
-  for (const session of pendingSessions) {
-    const href = `/patients/${session.patientId}`
-    const label = `${session.patient.anonymousId} — ${session.scale.name}`
+  for (const clinicalSession of openSessions) {
+    const href = `/patients/${clinicalSession.patientId}/sessions/${clinicalSession.id}`
+    const pendingCount = clinicalSession.questionnaires.length
+    const scales = clinicalSession.questionnaires
+      .map((q) => q.scale.name)
+      .join(", ")
+    const label = `${clinicalSession.patient.anonymousId} — ${clinicalSession.title}`
 
-    if (isTokenExpired(session.tokenExpiresAt)) {
+    if (isTokenExpired(clinicalSession.tokenExpiresAt)) {
       await createNotification({
         userId,
         type: NotificationType.LINK_EXPIRED,
-        dedupeKey: `session:${session.id}:link-expired`,
-        title: "Questionnaire link expired",
-        body: `${label}: patient didn't complete. Send a new link.`,
+        dedupeKey: `session:${clinicalSession.id}:link-expired`,
+        title: "Session link expired",
+        body: `${label}: ${pendingCount} questionnaire${pendingCount === 1 ? "" : "s"} (${scales}) not completed. Renew the link.`,
         href,
-        patientId: session.patientId,
-        sessionId: session.id,
+        patientId: clinicalSession.patientId,
+        sessionId: clinicalSession.id,
       })
 
-      await prisma.assessmentSession.update({
-        where: { id: session.id },
+      await prisma.questionnaire.updateMany({
+        where: { sessionId: clinicalSession.id, status: "PENDING" },
         data: { status: "EXPIRED" },
       })
       continue
     }
 
-    const msUntilExpiry = session.tokenExpiresAt.getTime() - now
+    const msUntilExpiry = clinicalSession.tokenExpiresAt.getTime() - now
     if (msUntilExpiry <= LINK_EXPIRING_WINDOW_MS) {
       await createNotification({
         userId,
         type: NotificationType.LINK_EXPIRING_SOON,
-        dedupeKey: `session:${session.id}:link-expiring`,
-        title: "Questionnaire link expiring soon",
-        body: `${label}: link expires within 24 hours. Send a reminder or create a new link.`,
+        dedupeKey: `session:${clinicalSession.id}:link-expiring`,
+        title: "Session link expiring soon",
+        body: `${label}: link expires within 24 hours with ${pendingCount} questionnaire${pendingCount === 1 ? "" : "s"} outstanding.`,
         href,
-        patientId: session.patientId,
-        sessionId: session.id,
+        patientId: clinicalSession.patientId,
+        sessionId: clinicalSession.id,
       })
     }
   }

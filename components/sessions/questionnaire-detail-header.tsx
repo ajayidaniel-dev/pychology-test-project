@@ -13,24 +13,29 @@ import { PageHeader } from "@/components/layout/page-header"
 import { SeverityBadge } from "@/components/ui/severity-badge"
 import type { SeverityLevel } from "@/components/ui/severity-badge"
 
-interface SessionDetailHeaderProps {
+interface QuestionnaireDetailHeaderProps {
   patientId: string
   sessionId: string
+  questionnaireId: string
   anonymousId: string
+  sessionTitle: string
   scaleName: string
   completedAt: Date
   severity: SeverityLevel | null
 }
 
-export function SessionDetailHeader({
+export function QuestionnaireDetailHeader({
   patientId,
   sessionId,
+  questionnaireId,
   anonymousId,
+  sessionTitle,
   scaleName,
   completedAt,
   severity,
-}: SessionDetailHeaderProps) {
+}: QuestionnaireDetailHeaderProps) {
   const formattedDate = new Date(completedAt).toLocaleDateString()
+  const sessionHref = `/patients/${patientId}/sessions/${sessionId}`
 
   return (
     <div className="space-y-3">
@@ -49,7 +54,13 @@ export function SessionDetailHeader({
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>Session {formattedDate}</BreadcrumbPage>
+            <BreadcrumbLink asChild>
+              <Link href={sessionHref}>{sessionTitle}</Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{scaleName}</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
@@ -69,13 +80,13 @@ export function SessionDetailHeader({
 
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
-          <Link href={`/patients/${patientId}`}>
+          <Link href={sessionHref}>
             <ArrowLeft className="size-4" />
-            Back to patient
+            Back to session
           </Link>
         </Button>
         <Button variant="outline" size="sm" className="h-8 gap-1 px-2" asChild>
-          <Link href={`/patients/${patientId}/sessions/${sessionId}/report`}>
+          <Link href={`${sessionHref}/questionnaires/${questionnaireId}/report`}>
             <FileText className="size-4" />
             Report
           </Link>

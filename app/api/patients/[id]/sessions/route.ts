@@ -4,9 +4,12 @@ import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
+import { fillUrlFor } from '@/lib/request-origin'
 
 const CreateSessionSchema = z.object({
-  scaleId: z.string().min(1),
+  title: z.string().trim().min(1).max(120),
+  reason: z.string().trim().max(2000).optional(),
+  scheduledAt: z.coerce.date(),
   collectDetails: z.boolean().optional().default(false),
 })
 
@@ -23,44 +26,38 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = CreateSessionSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const scaleRecord = await prisma.scale.findFirst({
-    where: {
-      id: parsed.data.scaleId,
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
-    },
-  })
-  if (!scaleRecord) return NextResponse.json({ error: 'Scale not found' }, { status: 400 })
-
-  const token = generateToken()
-  const assessmentSession = await prisma.assessmentSession.create({
+  const clinicalSession = await prisma.clinicalSession.create({
     data: {
       patientId: params.id,
       psychologistId: session.user.id,
-      scaleId: parsed.data.scaleId,
+      title: parsed.data.title,
+      reason: parsed.data.reason || null,
+      scheduledAt: parsed.data.scheduledAt,
       collectDetails: parsed.data.collectDetails,
-      token,
+      token: generateToken(),
       tokenExpiresAt: tokenExpiresAt(),
     },
   })
 
-  // Prefer the host the request actually came in on; behind a proxy that is
-  // the forwarded host. NEXTAUTH_URL is only a last resort.
-  const proto = req.headers.get('x-forwarded-proto') ?? req.nextUrl.protocol.replace(':', '')
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
-  const origin = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL ?? req.nextUrl.origin)
-  const fillUrl = `${origin}/fill/${token}`
-
-  return NextResponse.json({ ...assessmentSession, fillUrl }, { status: 201 })
+  return NextResponse.json(
+    { ...clinicalSession, fillUrl: fillUrlFor(req, clinicalSession.token) },
+    { status: 201 },
+  )
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const sessions = await prisma.assessmentSession.findMany({
+  const sessions = await prisma.clinicalSession.findMany({
     where: { patientId: params.id, psychologistId: session.user.id },
-    include: { response: true },
-    orderBy: { createdAt: 'asc' },
+    include: {
+      questionnaires: {
+        include: { response: true, scale: { select: { id: true, name: true } } },
+        orderBy: { order: 'asc' },
+      },
+    },
+    orderBy: { scheduledAt: 'desc' },
   })
 
   return NextResponse.json(sessions)

@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -14,22 +15,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FormErrorAlert } from "@/components/ui/form-error-alert"
-import { Plus, Copy, Check } from "lucide-react"
+import { Plus } from "lucide-react"
 
-interface Scale {
-  id: string
-  name: string
-  description: string | null
-  isLibrary: boolean
+/** `datetime-local` wants `YYYY-MM-DDTHH:mm` in local time, not an ISO string. */
+function toLocalInputValue(date: Date): string {
+  const offset = date.getTimezoneOffset() * 60_000
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
 export function NewSessionDialog({
@@ -41,22 +35,22 @@ export function NewSessionDialog({
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [scales, setScales] = useState<Scale[]>([])
-  const [scaleId, setScaleId] = useState("")
+  const [title, setTitle] = useState("")
+  const [reason, setReason] = useState("")
+  const [scheduledAt, setScheduledAt] = useState(() =>
+    toLocalInputValue(new Date()),
+  )
   const [collectDetails, setCollectDetails] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [fillUrl, setFillUrl] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (open) {
-      fetch("/api/scales")
-        .then((r) => r.json())
-        .then(setScales)
-        .catch(() => setError("Failed to load scales"))
-    }
-  }, [open])
+  function reset() {
+    setTitle("")
+    setReason("")
+    setScheduledAt(toLocalInputValue(new Date()))
+    setCollectDetails(false)
+    setError(null)
+  }
 
   async function onCreate() {
     setLoading(true)
@@ -64,46 +58,35 @@ export function NewSessionDialog({
     const res = await fetch(`/api/patients/${patientId}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scaleId, collectDetails }),
+      body: JSON.stringify({
+        title: title.trim(),
+        reason: reason.trim() || undefined,
+        scheduledAt: new Date(scheduledAt).toISOString(),
+        collectDetails,
+      }),
     })
     setLoading(false)
+
     if (!res.ok) {
       setError("Failed to create session")
       return
     }
-    const data = await res.json()
-    setFillUrl(data.fillUrl)
-    toast.success("Session created")
-  }
 
-  function onCopy() {
-    navigator.clipboard.writeText(fillUrl!)
-    setCopied(true)
-    toast.success("Link copied")
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  function onClose() {
-    const created = fillUrl !== null
+    const created = await res.json()
     setOpen(false)
-    setFillUrl(null)
-    setScaleId("")
-    setCollectDetails(false)
-    setError(null)
-    // Refresh the sessions list only after the dialog closes, so the
-    // copy-link view survives until the clinician is done with it.
-    if (created) router.refresh()
+    reset()
+    toast.success("Session created")
+    // Land on the session so the next step — attaching questionnaires — is
+    // where the clinician already is.
+    router.push(`/patients/${patientId}/sessions/${created.id}`)
   }
-
-  const libraryScales = scales.filter((s) => s.isLibrary)
-  const myScales = scales.filter((s) => !s.isLibrary)
 
   return (
     <Dialog
       open={open}
       onOpenChange={(val) => {
-        if (!val) onClose()
-        else setOpen(true)
+        setOpen(val)
+        if (!val) reset()
       }}
     >
       <DialogTrigger asChild>
@@ -114,128 +97,96 @@ export function NewSessionDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>
-            {fillUrl ? "Session created" : "New Assessment Session"}
-          </DialogTitle>
+          <DialogTitle>New session</DialogTitle>
+          <DialogDescription>
+            A session is an appointment. You&apos;ll add questionnaires to it
+            next.
+          </DialogDescription>
         </DialogHeader>
 
-        {fillUrl ? (
-          <div className="mt-2 space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Copy and send to the patient. Expires in 72 hours, single use.
+        <div className="mt-2 space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="session-title">Title</Label>
+            <Input
+              id="session-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Intake, Week 4 review…"
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="session-date">Date and time</Label>
+            <Input
+              id="session-date"
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="session-reason">
+              Reason{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
+            </Label>
+            <Textarea
+              id="session-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why this session is happening"
+              rows={3}
+              className="resize-y"
+            />
+          </div>
+
+          {patientHasDetails ? (
+            <p className="text-xs text-muted-foreground">
+              This patient&apos;s details are already on file — the link will
+              skip identity questions.
             </p>
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={fillUrl}
-                aria-label="Assessment link"
-                className="min-w-0 flex-1 font-mono text-xs"
-                onFocus={(e) => e.currentTarget.select()}
+          ) : (
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="collect-details"
+                checked={collectDetails}
+                onCheckedChange={(v) => setCollectDetails(v === true)}
+                className="mt-0.5"
               />
-              <Button
-                variant="outline"
-                size="icon"
-                className="shrink-0"
-                aria-label={copied ? "Link copied" : "Copy link"}
-                onClick={onCopy}
-              >
-                {copied ? (
-                  <Check className="size-4" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
-              </Button>
-            </div>
-            <DialogFooter className="flex-col-reverse sm:flex-row">
-              <Button onClick={onClose} className="w-full sm:w-auto">
-                Done
-              </Button>
-            </DialogFooter>
-          </div>
-        ) : (
-          <div className="mt-2 space-y-3">
-            <div className="space-y-1">
-              <Label>Scale</Label>
-              <Select value={scaleId} onValueChange={setScaleId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a scale…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {scales.length === 0 && (
-                    <SelectItem value="_loading" disabled>
-                      Loading…
-                    </SelectItem>
-                  )}
-                  {libraryScales.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Library
-                      </div>
-                      {libraryScales.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                  {myScales.length > 0 && (
-                    <>
-                      <div className="px-2 py-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        Custom
-                      </div>
-                      {myScales.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            {patientHasDetails ? (
-              <p className="text-xs text-muted-foreground">
-                This patient&apos;s details are already on file — the link will
-                skip identity questions.
-              </p>
-            ) : (
-              <div className="flex items-start gap-2 pt-1">
-                <Checkbox
-                  id="collect-details"
-                  checked={collectDetails}
-                  onCheckedChange={(v) => setCollectDetails(v === true)}
-                  className="mt-0.5"
-                />
-                <div className="grid gap-0.5">
-                  <Label htmlFor="collect-details" className="cursor-pointer">
-                    Collect patient details on this link
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    After consenting, the patient is asked for their name,
-                    contact details, and a few context questions.
-                  </p>
-                </div>
+              <div className="grid gap-0.5">
+                <Label htmlFor="collect-details" className="cursor-pointer">
+                  Collect patient details on this session&apos;s link
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  After consenting, the patient is asked once for their name,
+                  contact details, and a few context questions.
+                </p>
               </div>
-            )}
-            {error && <FormErrorAlert message={error} />}
-            <DialogFooter className="flex-col-reverse sm:flex-row">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                className="w-full sm:w-auto"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={onCreate}
-                disabled={!scaleId || loading}
-                className="w-full sm:w-auto"
-              >
-                {loading ? "Creating…" : "Create & get link"}
-              </Button>
-            </DialogFooter>
-          </div>
-        )}
+            </div>
+          )}
+
+          {error && <FormErrorAlert message={error} />}
+
+          <DialogFooter className="flex-col-reverse sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setOpen(false)}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={onCreate}
+              disabled={!title.trim() || !scheduledAt || loading}
+              className="w-full sm:w-auto"
+            >
+              {loading ? "Creating…" : "Create session"}
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )

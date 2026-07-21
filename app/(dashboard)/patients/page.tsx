@@ -11,7 +11,11 @@ import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { NewPatientDialog } from "@/components/patients/new-patient-dialog"
 import { PatientListSection } from "@/components/patients/patient-list-section"
-import { shapePatientList } from "@/lib/patient-summary"
+import {
+  shapePatientList,
+  PATIENT_QUESTIONNAIRES_INCLUDE,
+  flattenQuestionnaires,
+} from "@/lib/patient-summary"
 
 export default async function PatientsPage() {
   const session = await getServerSession(authOptions)
@@ -19,16 +23,16 @@ export default async function PatientsPage() {
 
   const patients = await prisma.patient.findMany({
     where: { psychologistId: session.user.id },
-    include: {
-      assessmentSessions: {
-        include: { response: true, scale: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    include: PATIENT_QUESTIONNAIRES_INCLUDE,
     orderBy: { createdAt: "desc" },
   })
 
-  const patientList = shapePatientList(patients)
+  const patientList = shapePatientList(
+    patients.map((p) => ({
+      ...p,
+      questionnaires: flattenQuestionnaires(p.clinicalSessions),
+    })),
+  )
 
   return (
     <div className="flex flex-col gap-6">

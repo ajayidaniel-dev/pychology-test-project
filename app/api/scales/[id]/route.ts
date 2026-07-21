@@ -57,11 +57,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const scale = await prisma.scale.findFirst({
     where: { id: params.id, psychologistId: session.user.id, isLibrary: false },
-    include: { _count: { select: { assessmentSessions: true } } },
+    include: { _count: { select: { questionnaires: true } } },
   })
   if (!scale) return NextResponse.json({ error: 'Not found or not editable' }, { status: 404 })
-  if (scale._count.assessmentSessions > 0) {
-    return NextResponse.json({ error: 'Cannot delete a scale with existing sessions' }, { status: 409 })
+  if (scale._count.questionnaires > 0) {
+    return NextResponse.json({ error: 'Cannot delete a scale already used in a questionnaire' }, { status: 409 })
   }
 
   await prisma.scale.delete({ where: { id: params.id } })

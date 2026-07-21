@@ -20,7 +20,7 @@ import {
 import type { ClinicalNarrative } from "@/app/api/narrative/route"
 
 export const metadata: Metadata = {
-  title: "Session report",
+  title: "Questionnaire report",
 }
 
 function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -34,39 +34,39 @@ function ReportSection({ title, children }: { title: string; children: React.Rea
   )
 }
 
-export default async function SessionReportPage({
+export default async function QuestionnaireReportPage({
   params,
 }: {
-  params: { id: string; sessionId: string }
+  params: { id: string; sessionId: string; questionnaireId: string }
 }) {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/auth/signin")
 
-  const assessmentSession = await prisma.assessmentSession.findFirst({
+  const questionnaire = await prisma.questionnaire.findFirst({
     where: {
-      id: params.sessionId,
-      patientId: params.id,
-      psychologistId: session.user.id,
+      id: params.questionnaireId,
+      sessionId: params.sessionId,
+      session: { patientId: params.id, psychologistId: session.user.id },
     },
     include: {
       response: true,
-      patient: true,
+      session: { include: { patient: true } },
       scale: { include: { items: { orderBy: { order: "asc" } } } },
     },
   })
 
-  if (!assessmentSession || !assessmentSession.response) notFound()
+  if (!questionnaire || !questionnaire.response) notFound()
 
-  const response = assessmentSession.response
+  const response = questionnaire.response
   const itemScores = response.itemScores as Record<string, number | string>
   const alerts = computeAlerts(
-    scaleNameToEnum(assessmentSession.scale.name),
+    scaleNameToEnum(questionnaire.scale.name),
     response.totalScore,
     itemScores as Record<string, number>,
     response.severity,
   )
   const itemLabelMap = Object.fromEntries(
-    assessmentSession.scale.items.map((item) => [String(item.order), item.text]),
+    questionnaire.scale.items.map((item) => [String(item.order), item.text]),
   )
   const narrative = response.narrative as ClinicalNarrative | null
 
@@ -74,18 +74,23 @@ export default async function SessionReportPage({
     <div className="print-report mx-auto flex max-w-3xl flex-col gap-6">
       <div className="print-hidden flex items-center justify-between gap-2">
         <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
-          <Link href={`/patients/${params.id}/sessions/${params.sessionId}`}>
+          <Link
+            href={`/patients/${params.id}/sessions/${params.sessionId}/questionnaires/${params.questionnaireId}`}
+          >
             <ArrowLeft className="size-4" />
-            Back to session
+            Back to results
           </Link>
         </Button>
         <PrintButton />
       </div>
 
       <header className="space-y-1 border-b pb-4">
-        <h1 className="text-xl font-semibold">{assessmentSession.scale.name} — Session Report</h1>
+        <h1 className="text-xl font-semibold">
+          {questionnaire.scale.name} — Questionnaire Report
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Patient: {assessmentSession.patient.anonymousId} · Completed{" "}
+          Patient: {questionnaire.session.patient.anonymousId} ·{" "}
+          {questionnaire.session.title} · Completed{" "}
           {response.completedAt.toLocaleDateString()}
         </p>
       </header>
@@ -153,12 +158,13 @@ export default async function SessionReportPage({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No AI summary has been generated for this session yet. Open the{" "}
+            No AI summary has been generated for this questionnaire yet. Open
+            the{" "}
             <Link
-              href={`/patients/${params.id}/sessions/${params.sessionId}`}
+              href={`/patients/${params.id}/sessions/${params.sessionId}/questionnaires/${params.questionnaireId}`}
               className="underline"
             >
-              session page
+              results page
             </Link>{" "}
             to generate one.
           </p>
