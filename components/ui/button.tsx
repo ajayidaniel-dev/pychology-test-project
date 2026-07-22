@@ -35,25 +35,29 @@ const buttonVariants = cva(
   },
 )
 
-function Button({
-  className,
-  variant,
-  size,
-  asChild = false,
-  ...props
-}: React.ComponentProps<'button'> &
+type ButtonProps = React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot : 'button'
+  }
 
-  return (
-    <Comp
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
-}
+// forwardRef is required on React 18: Radix triggers (`<DropdownMenuTrigger
+// asChild><Button/>`) hand the button a ref and use that element as the popper
+// anchor. A plain function component swallows the ref, leaving the anchor null,
+// and Radix parks the unpositioned content at translate(0,-200%) — the menu
+// opens completely offscreen and the trigger looks dead.
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  function Button({ className, variant, size, asChild = false, ...props }, ref) {
+    const Comp = asChild ? Slot : 'button'
+
+    return (
+      <Comp
+        ref={ref}
+        data-slot="button"
+        className={cn(buttonVariants({ variant, size, className }))}
+        {...props}
+      />
+    )
+  },
+)
 
 export { Button, buttonVariants }

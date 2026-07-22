@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { SeverityBadge } from "@/components/ui/severity-badge"
 import type { SeverityLevel } from "@/components/ui/severity-badge"
 import { QuestionnaireStatusBadge } from "@/components/sessions/status-badges"
+import { CopyLinkButton } from "@/components/sessions/copy-link-button"
 import type { SessionQuestionnaireRow } from "@/components/sessions/session-questionnaires-section"
 
 function severityToLevel(severity: string | null): SeverityLevel | null {
@@ -29,17 +30,26 @@ interface SessionQuestionnairesTableProps {
   patientId: string
   sessionId: string
   questionnaires: SessionQuestionnaireRow[]
+  /** The session's fill token — the link is per session, shared by its rows. */
+  token: string
+  linkExpired: boolean
 }
 
 export function SessionQuestionnairesTable({
   patientId,
   sessionId,
   questionnaires,
+  token,
+  linkExpired,
 }: SessionQuestionnairesTableProps) {
   const router = useRouter()
 
-  const hrefFor = (id: string) =>
-    `/patients/${patientId}/sessions/${sessionId}/questionnaires/${id}`
+  // Only a completed questionnaire has a results page. Pending and expired ones
+  // have no response row, so linking them would land on a 404.
+  const hrefFor = (row: SessionQuestionnaireRow) =>
+    row.status === "COMPLETED"
+      ? `/patients/${patientId}/sessions/${sessionId}/questionnaires/${row.id}`
+      : null
 
   async function onRemove(id: string) {
     const res = await fetch(
@@ -112,6 +122,7 @@ export function SessionQuestionnairesTable({
     {
       id: "actions",
       enableSorting: false,
+      meta: { className: "w-24" },
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const questionnaire = row.original
@@ -119,18 +130,25 @@ export function SessionQuestionnairesTable({
           return <ChevronRight className="size-4 text-muted-foreground" />
         }
         return (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative z-20 size-8"
-            aria-label={`Remove ${questionnaire.scaleName}`}
-            onClick={(e) => {
-              e.preventDefault()
-              onRemove(questionnaire.id)
-            }}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <div className="flex items-center justify-end gap-0.5">
+            {/* Only a pending row is still fillable — an expired one needs the
+                session link renewed before its link means anything. */}
+            {questionnaire.status === "PENDING" && !linkExpired && (
+              <CopyLinkButton token={token} iconOnly />
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative z-20 size-8"
+              aria-label={`Remove ${questionnaire.scaleName}`}
+              onClick={(e) => {
+                e.preventDefault()
+                onRemove(questionnaire.id)
+              }}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
         )
       },
     },
@@ -142,7 +160,7 @@ export function SessionQuestionnairesTable({
       data={questionnaires}
       shell={false}
       isRowClickable={(row) => row.status === "COMPLETED"}
-      getRowHref={(row) => hrefFor(row.id)}
+      getRowHref={hrefFor}
       mobileListClassName="divide-y"
       renderMobileRow={(questionnaire) => (
         <div className="px-4 py-3">
@@ -164,21 +182,26 @@ export function SessionQuestionnairesTable({
             </div>
           )}
 
-          <div className="mt-3">
+          <div className="mt-3 flex flex-col gap-2">
             {questionnaire.status === "COMPLETED" ? (
               <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link href={hrefFor(questionnaire.id)}>View results</Link>
+                <Link href={hrefFor(questionnaire)!}>View results</Link>
               </Button>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full"
-                onClick={() => onRemove(questionnaire.id)}
-              >
-                <Trash2 className="size-4" />
-                Remove from session
-              </Button>
+              <>
+                {questionnaire.status === "PENDING" && !linkExpired && (
+                  <CopyLinkButton token={token} className="w-full border" />
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => onRemove(questionnaire.id)}
+                >
+                  <Trash2 className="size-4" />
+                  Remove from session
+                </Button>
+              </>
             )}
           </div>
         </div>

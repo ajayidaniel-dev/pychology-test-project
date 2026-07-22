@@ -196,8 +196,9 @@ export function TanStackDataTable<T>({
                 // alone gave no link semantics — no cmd/middle-click, no "open
                 // in new tab", and screen readers announced a row, not a link.
                 // Rows that only have onRowClick keep the keyboard-activated
-                // fallback.
-                const usesStretchedLink = Boolean(href)
+                // fallback. A row that isn't clickable never gets the link,
+                // even if getRowHref still resolves one for it.
+                const usesStretchedLink = Boolean(href) && clickable
 
                 return (
                   <TableRow

@@ -117,6 +117,8 @@ export default async function SessionDetailPage({
         patientId={params.id}
         sessionId={clinicalSession.id}
         questionnaires={rows}
+        token={clinicalSession.token}
+        linkExpired={linkExpired || clinicalSession.status === "CANCELLED"}
       />
 
       <NotesSection

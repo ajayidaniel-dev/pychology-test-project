@@ -19,12 +19,16 @@ interface SessionQuestionnairesSectionProps {
   patientId: string
   sessionId: string
   questionnaires: SessionQuestionnaireRow[]
+  token: string
+  linkExpired: boolean
 }
 
 export function SessionQuestionnairesSection({
   patientId,
   sessionId,
   questionnaires,
+  token,
+  linkExpired,
 }: SessionQuestionnairesSectionProps) {
   return (
     <Card className="overflow-hidden py-0 shadow-sm">
@@ -47,6 +51,8 @@ export function SessionQuestionnairesSection({
             patientId={patientId}
             sessionId={sessionId}
             questionnaires={questionnaires}
+            token={token}
+            linkExpired={linkExpired}
           />
         </div>
       )}
