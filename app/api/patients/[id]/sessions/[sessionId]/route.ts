@@ -3,8 +3,8 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
-import { generateToken, tokenExpiresAt } from '@/lib/token'
 import { fillUrlFor } from '@/lib/request-origin'
+import { renewSessionLink } from '@/lib/session-links'
 
 export async function GET(
   req: NextRequest,
@@ -69,22 +69,13 @@ export async function PATCH(
 
   const { renewLink, ...fields } = parsed.data
 
-  const updated = await prisma.clinicalSession.update({
+  let updated = await prisma.clinicalSession.update({
     where: { id: params.sessionId },
-    data: {
-      ...fields,
-      ...(renewLink
-        ? { token: generateToken(), tokenExpiresAt: tokenExpiresAt() }
-        : {}),
-    },
+    data: fields,
   })
 
-  // Renewing revives questionnaires the previous token's expiry knocked out.
   if (renewLink) {
-    await prisma.questionnaire.updateMany({
-      where: { sessionId: params.sessionId, status: 'EXPIRED' },
-      data: { status: 'PENDING' },
-    })
+    updated = await renewSessionLink(prisma, params.sessionId)
   }
 
   return NextResponse.json({ ...updated, fillUrl: fillUrlFor(req, updated.token) })

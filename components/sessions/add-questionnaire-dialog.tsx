@@ -162,7 +162,7 @@ export function AddQuestionnaireDialog({
               disabled={!scaleId || loading}
               className="w-full sm:w-auto"
             >
-              {loading ? "Adding…" : "Add to session"}
+              {loading ? "Adding…" : "Add questionnaire"}
             </Button>
           </DialogFooter>
         </div>

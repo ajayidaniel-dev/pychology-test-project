@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BookOpen, LayoutDashboard, Settings, Users, X } from "lucide-react"
+import { BookOpen, Layers, LayoutDashboard, Settings, Users, X } from "lucide-react"
 import { NavUser } from "@/components/layout/nav-user"
 import { SidebarCollapseTrigger } from "@/components/layout/sidebar-collapse-trigger"
 import { Button } from "@/components/ui/button"
@@ -23,6 +23,7 @@ import {
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/patients", label: "Patients", icon: Users },
+  { href: "/batches", label: "Batches", icon: Layers },
   { href: "/scales", label: "Scales", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const

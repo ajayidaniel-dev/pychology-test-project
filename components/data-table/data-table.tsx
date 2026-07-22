@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   type ColumnDef,
   type ColumnFiltersState,
+  type RowSelectionState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -15,6 +16,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table"
 import { Card } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Table,
   TableBody,
@@ -48,6 +50,16 @@ export interface TanStackDataTableProps<T> {
   emptyState?: React.ReactNode
   className?: string
   shell?: boolean
+  /**
+   * Opt-in multi-select. Off by default so every existing table — patients,
+   * questionnaires, scales — is unaffected. Requires `getRowId`, since
+   * selection is reported as ids rather than row indexes (indexes shift when
+   * the caller re-filters the data).
+   */
+  enableRowSelection?: boolean
+  getRowId?: (row: T) => string
+  selectedIds?: string[]
+  onSelectionChange?: (ids: string[]) => void
 }
 
 export function TanStackDataTable<T>({
@@ -68,6 +80,10 @@ export function TanStackDataTable<T>({
   emptyState,
   className,
   shell = true,
+  enableRowSelection = false,
+  getRowId,
+  selectedIds,
+  onSelectionChange,
 }: TanStackDataTableProps<T>) {
   const router = useRouter()
   const isMobile = useIsMobile()
@@ -75,13 +91,60 @@ export function TanStackDataTable<T>({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState("")
 
+  const rowSelection: RowSelectionState = useMemo(
+    () => Object.fromEntries((selectedIds ?? []).map((id) => [id, true])),
+    [selectedIds],
+  )
+
+  const selectionColumn: ColumnDef<T> = useMemo(
+    () => ({
+      id: "select",
+      enableSorting: false,
+      meta: { className: "w-10 pr-0" },
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
+          }
+          onCheckedChange={(value) =>
+            table.toggleAllPageRowsSelected(value === true)
+          }
+          aria-label="Select all rows on this page"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(value === true)}
+          aria-label="Select row"
+        />
+      ),
+    }),
+    [],
+  )
+
+  const resolvedColumns = useMemo(
+    () => (enableRowSelection ? [selectionColumn, ...columns] : columns),
+    [enableRowSelection, selectionColumn, columns],
+  )
+
   const table = useReactTable({
     data,
-    columns,
+    columns: resolvedColumns,
+    getRowId: getRowId ? (row) => getRowId(row) : undefined,
+    enableRowSelection,
     state: {
       sorting,
       columnFilters,
       globalFilter,
+      ...(enableRowSelection ? { rowSelection } : {}),
+    },
+    onRowSelectionChange: (updater) => {
+      if (!onSelectionChange) return
+      const next =
+        typeof updater === "function" ? updater(rowSelection) : updater
+      onSelectionChange(Object.keys(next).filter((id) => next[id]))
     },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -177,7 +240,7 @@ export function TanStackDataTable<T>({
             {rows.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={resolvedColumns.length}
                   className="h-24 text-center text-muted-foreground"
                 >
                   No results.
@@ -189,7 +252,15 @@ export function TanStackDataTable<T>({
                 const href = getRowHref?.(original) ?? null
                 const clickable = isRowClickable
                   ? isRowClickable(original)
-                  : Boolean(href || onRowClick)
+                  : Boolean(href || onRowClick || enableRowSelection)
+
+                // With selection on and nowhere to navigate to, activating a
+                // row means ticking it — clicking the label of a checkbox row
+                // should not have to hit the 16px box itself.
+                const activate =
+                  enableRowSelection && !href
+                    ? () => row.toggleSelected(!row.getIsSelected())
+                    : () => handleRowActivate(original)
 
                 // When the row resolves to a URL we render a real anchor in the
                 // first cell and stretch it over the row. Row-level onClick
@@ -205,9 +276,7 @@ export function TanStackDataTable<T>({
                     key={row.id}
                     tabIndex={clickable && !usesStretchedLink ? 0 : undefined}
                     onClick={
-                      usesStretchedLink
-                        ? undefined
-                        : () => clickable && handleRowActivate(original)
+                      usesStretchedLink ? undefined : () => clickable && activate()
                     }
                     onKeyDown={(event) => {
                       if (
@@ -216,12 +285,14 @@ export function TanStackDataTable<T>({
                         (event.key === "Enter" || event.key === " ")
                       ) {
                         event.preventDefault()
-                        handleRowActivate(original)
+                        activate()
                       }
                     }}
+                    data-state={row.getIsSelected() ? "selected" : undefined}
                     className={cn(
                       "relative transition-colors",
                       clickable && "cursor-pointer hover:bg-muted/50",
+                      "data-[state=selected]:bg-muted/50",
                       "focus-within:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                       getRowClassName?.(original),
                     )}
@@ -232,16 +303,23 @@ export function TanStackDataTable<T>({
                         className={cn(
                           "px-4 first:pl-6 last:pr-6",
                           cell.column.id === "actions" && "relative z-20 w-12 px-2",
+                          cell.column.id === "select" && "relative z-20",
                           (cell.column.columnDef.meta as { className?: string } | undefined)
                             ?.className,
                         )}
                         onClick={(event) => {
-                          if (cell.column.id === "actions") {
+                          // The checkbox toggles selection itself; letting the
+                          // click reach the row would toggle it straight back.
+                          if (
+                            cell.column.id === "actions" ||
+                            cell.column.id === "select"
+                          ) {
                             event.stopPropagation()
                           }
                         }}
                       >
-                        {usesStretchedLink && cellIndex === 0 ? (
+                        {usesStretchedLink &&
+                        cellIndex === (enableRowSelection ? 1 : 0) ? (
                           // before: pseudo covers the row without becoming a
                           // real element over it, so cell text stays selectable
                           // and the actions cell (z-20) still wins clicks.

@@ -12,6 +12,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/patients/:path*",
+    "/batches/:path*",
     "/scales/:path*",
     "/settings/:path*",
   ],

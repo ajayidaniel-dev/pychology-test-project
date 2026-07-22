@@ -42,16 +42,17 @@ model VerificationToken {
 }
 
 model User {
-  id                      String              @id @default(cuid())
+  id                      String                   @id @default(cuid())
   name                    String?
-  email                   String?             @unique
+  email                   String?                  @unique
   emailVerified           DateTime?
   image                   String?
   passwordHash            String?
-  verificationToken       String?             @unique
+  verificationToken       String?                  @unique
   verificationTokenExpiry DateTime?
   accounts                Account[]
   clinicalSessions        ClinicalSession[]
+  sessionBatches          SessionBatch[]
   patients                Patient[]
   scales                  Scale[]
   sessions                Session[]
@@ -103,26 +104,26 @@ model SeverityThreshold {
 }
 
 model Patient {
-  id                 String              @id @default(cuid())
-  displayName        String
-  anonymousId        String
-  psychologistId     String
-  fullName           String?
-  email              String?
-  phone              String?
-  dateOfBirth        DateTime?
-  detailsUpdatedAt   DateTime?
+  id                  String            @id @default(cuid())
+  displayName         String
+  anonymousId         String
+  psychologistId      String
+  fullName            String?
+  email               String?
+  phone               String?
+  dateOfBirth         DateTime?
+  detailsUpdatedAt    DateTime?
   // Cross-session clinical summary. summarySessionCount records how many
   // completed sessions it was built from, so the UI can tell the clinician the
   // summary predates newer assessments instead of showing it as current.
   summary             Json?
   summaryGeneratedAt  DateTime?
   summarySessionCount Int?
-  createdAt          DateTime            @default(now())
-  clinicalSessions   ClinicalSession[]
-  notes              Note[]
-  notifications      Notification[]
-  psychologist       User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  createdAt           DateTime          @default(now())
+  clinicalSessions    ClinicalSession[]
+  notes               Note[]
+  notifications       Notification[]
+  psychologist        User              @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
   @@unique([anonymousId, psychologistId])
 }
@@ -140,6 +141,10 @@ model ClinicalSession {
   scheduledAt    DateTime
   status         ClinicalSessionStatus @default(SCHEDULED)
 
+  /// Set when the session was created as part of a batch send. Nullable
+  /// because the single-patient flow — still the common case — has no batch.
+  batchId String?
+
   token                String    @unique
   tokenExpiresAt       DateTime
   collectDetails       Boolean   @default(false)
@@ -149,11 +154,35 @@ model ClinicalSession {
   createdAt      DateTime        @default(now())
   patient        Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
   psychologist   User            @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  batch          SessionBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
   questionnaires Questionnaire[]
   notes          Note[]
   notifications  Notification[]
 
   @@index([patientId, scheduledAt])
+  @@index([batchId])
+}
+
+/// One authoring action fanned out across several patients: same title, date,
+/// and scales, but a separate ClinicalSession — and therefore a separate fill
+/// token — per patient. A shared link would let one patient open another's
+/// questionnaire, so batching is grouping, never a shared session.
+///
+/// Deleting a batch dissolves the grouping only (SetNull on the sessions). The
+/// sessions, responses, and notes it produced are clinical records and outlive
+/// it.
+model SessionBatch {
+  id             String   @id @default(cuid())
+  psychologistId String
+  title          String
+  reason         String?
+  scheduledAt    DateTime
+  createdAt      DateTime @default(now())
+
+  psychologist User              @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  sessions     ClinicalSession[]
+
+  @@index([psychologistId, createdAt])
 }
 
 model Questionnaire {
@@ -164,8 +193,8 @@ model Questionnaire {
   status    QuestionnaireStatus @default(PENDING)
   createdAt DateTime            @default(now())
 
-  session  ClinicalSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  scale    Scale                  @relation(fields: [scaleId], references: [id])
+  session       ClinicalSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scale         Scale                  @relation(fields: [scaleId], references: [id])
   response      QuestionnaireResponse?
   notes         Note[]
   notifications Notification[]
@@ -174,18 +203,18 @@ model Questionnaire {
 }
 
 model QuestionnaireResponse {
-  id              String        @id @default(cuid())
-  questionnaireId String        @unique
-  itemScores      Json
-  intakeAnswers   Json?
-  totalScore      Int
-  severity        String
-  completedAt     DateTime      @default(now())
-  reviewedAt      DateTime?
-  escalatedAt     DateTime?
+  id                   String        @id @default(cuid())
+  questionnaireId      String        @unique
+  itemScores           Json
+  intakeAnswers        Json?
+  totalScore           Int
+  severity             String
+  completedAt          DateTime      @default(now())
+  reviewedAt           DateTime?
+  escalatedAt          DateTime?
   narrative            Json?
   narrativeGeneratedAt DateTime?
-  questionnaire   Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+  questionnaire        Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
 }
 
 /// One note table for all three levels. patientId is always set so the patient
@@ -242,21 +271,21 @@ enum NotificationType {
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  type      NotificationType
-  title     String
-  body      String
-  href      String?
-  patientId String?
+  id              String           @id @default(cuid())
+  userId          String
+  type            NotificationType
+  title           String
+  body            String
+  href            String?
+  patientId       String?
   // sessionId is the ClinicalSession; questionnaireId narrows to one
   // questionnaire within it. Link-expiry alerts are session-level (the token
   // lives there), completion/severity alerts are questionnaire-level.
   sessionId       String?
   questionnaireId String?
-  dedupeKey String
-  readAt    DateTime?
-  createdAt DateTime         @default(now())
+  dedupeKey       String
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
 
   // Cascades keep the bell honest: a notification must never outlive the thing
   // it links to, or clicking it lands on a 404.
