@@ -2,7 +2,7 @@
 
 **Product name:** APAS (Clinical Overwatch)  
 **Repository:** `psychology-test`  
-**Last updated:** July 2026
+**Last updated:** 22 July 2026
 
 ---
 
@@ -11,7 +11,8 @@
 APAS is a clinical assessment platform for psychologists and clinicians. It lets practitioners:
 
 - Manage a de-identified patient caseload
-- Send secure questionnaire links to patients (no patient login required)
+- Send secure questionnaire links to patients (no patient login required), one patient at a time or as a batch across many
+
 - Score validated instruments automatically (PHQ-9, GAD-7, BDI-II, and more)
 - Review severity alerts, item-level responses, and AI-generated clinical summaries
 - Build custom scales and severity thresholds
@@ -33,7 +34,7 @@ Patients complete assessments on mobile-friendly forms via a unique token link. 
 | Charts | Recharts |
 | AI summaries | Anthropic Claude API (`/api/narrative`) |
 | Toasts | Sonner |
-| Tests | Jest (51 tests across 9 suites) |
+| Tests | Jest (62 tests across 10 suites) |
 
 ---
 
@@ -44,6 +45,8 @@ Patients complete assessments on mobile-friendly forms via a unique token link. 
 /auth/signup ──┘         │
 /auth/verify-email       ├──> /patients ──> /patients/[id] ──> /patients/[id]/sessions/[sessionId]
                          │                                            └──> …/questionnaires/[questionnaireId]
+                         ├──> /batches ──> /batches/[batchId] ──> (per-patient session above)
+                         │              └──> /batches/new
                          ├──> /scales ──> /scales/[id]
                          │              └──> /scales/new (wizard)
                          │
@@ -53,6 +56,7 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 ### Clinician dashboard
 - **Dashboard** — stat cards, alert feed for high-severity results, caseload table
 - **Patients** — searchable patient list, profile with score history chart, session list, notes
+- **Batches** — send one questionnaire set to many patients at once; filter the caseload by severity or time since last assessment, then track completion as a group
 - **Session detail** — an appointment: title, reason, date; the questionnaires attached to it, one shared fill link, session notes
 - **Questionnaire detail** — item scores, severity badges, AI clinical summary, Mark Reviewed / Escalate actions, questionnaire notes
 - **Scales** — library instruments (read-only) + custom scales; 3-step builder for new scales
@@ -70,6 +74,7 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 - **Patient** — anonymous ID (e.g. P-001), optional display name
 - **Scale / ScaleItem / SeverityThreshold** — instrument definitions and scoring rules
 - **ClinicalSession** — an appointment: title, reason, date, status. Owns the single fill link (token + expiry) shared by every questionnaire in it
+- **SessionBatch** — a group of sessions created together from one authoring action; owns no token and no patient
 - **Questionnaire** — one scale administered within a session; pending/completed/expired
 - **QuestionnaireResponse** — scores, severity, `reviewedAt`, `escalatedAt`
 - **Note** — clinician notes, attachable to a patient, a session, or a single questionnaire
@@ -77,6 +82,12 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 
 A session is not a questionnaire. One session holds many questionnaires, the
 patient receives one link for all of them, and consent is captured once.
+
+A batch is not a session either. The fill token lives on `ClinicalSession` and a
+session belongs to one patient, so batching fans out into one session — and one
+private token — per patient. `ClinicalSession.batchId` is nullable, and deleting
+a batch nulls it rather than cascading: the grouping goes, the clinical record
+stays.
 
 ### Library scales (seeded)
 PHQ-9, GAD-7, BDI-II, DASS-21, AUDIT, PCL-5
@@ -87,7 +98,7 @@ PHQ-9, GAD-7, BDI-II, DASS-21, AUDIT, PCL-5
 
 ### 1. UI upgrade (Phases 0–8)
 
-A full design-system refresh documented in [`docs/UI_UPGRADE_PLAN.md`](UI_UPGRADE_PLAN.md):
+A full design-system refresh:
 
 - Design tokens, shared layout components (`PageHeader`, `EmptyState`, `SectionHeader`, auth shell)
 - Responsive sidebar with collapse, dashboard header, dark mode toggle
@@ -158,8 +169,18 @@ All data tables migrated from a basic `DataTable` wrapper to a shared TanStack T
 Sessions used to *be* questionnaires — creating one forced a scale choice up
 front. Split into `ClinicalSession` (the appointment) and `Questionnaire` (a
 scale within it), with one fill link per session and notes at all three levels.
-Full write-up in
-[`docs/sessions-questionnaires-split-report.md`](sessions-questionnaires-split-report.md).
+
+### 8. Batch questionnaires
+
+One authoring action across many patients, plus four session-screen fixes
+(row-click 404, an actions menu rendering offscreen because `Button` didn't
+forward refs on React 18, the fill skeleton escaping its shell, and stale CTA
+copy). Full write-up in
+[`docs/batch-questionnaires-report.md`](batch-questionnaires-report.md).
+
+Selection filters — current severity, time since last assessment — narrow the
+caseload; checkboxes commit. `TanStackDataTable` gained opt-in row selection
+(default off) to support the picker.
 
 ---
 
@@ -167,13 +188,14 @@ Full write-up in
 
 ```
 app/
-  (dashboard)/     # Clinician pages (dashboard, patients, scales)
-  api/             # REST routes (auth, patients, scales, fill, notifications, narrative)
+  (dashboard)/     # Clinician pages (dashboard, patients, batches, scales)
+  api/             # REST routes (auth, patients, batches, scales, fill, notifications, narrative)
   auth/            # Sign in, sign up, verify email
   fill/            # Patient questionnaire (public, token-based)
 
 components/
-  data-table/      # TanStack Table kit
+  batches/         # Batch picker, criteria bar, list/detail tables, actions
+  data-table/      # TanStack Table kit (sorting, paging, mobile rows, opt-in selection)
   dashboard/       # Stat cards, alerts, caseload
   layout/          # Sidebar, header, shell, HeaderMenu
   notes/           # Note list + composer, shared across all three levels
@@ -187,6 +209,9 @@ lib/
   notifications.ts # Notification service
   alert-rules.ts   # Severity / SI detection
   seed-scales.ts   # Library scale definitions
+  batch-filters.ts # Pure caseload filtering for batch selection
+  batches.ts       # Batch progress + shared Prisma include
+  session-links.ts # Token renewal (shared by single-session and batch renew)
   patient-summary.ts
   scoring-engine.ts
 
@@ -229,6 +254,7 @@ Build: `yarn build` (if stale cache errors: `rm -rf .next && yarn dev`)
 | Alert rules | `__tests__/lib/alert-rules.test.ts` |
 | Notifications | `__tests__/lib/notifications.test.ts` |
 | Scale scoring | `__tests__/lib/scale-scoring.test.ts` |
+| Batch selection filters | `__tests__/lib/batch-filters.test.ts` |
 | Tokens / passwords / anonymous IDs | `__tests__/lib/*.test.ts` |
 
 ---
@@ -239,6 +265,9 @@ Build: `yarn build` (if stale cache errors: `rm -rf .next && yarn dev`)
 2. **Escalate to Supervisor** — timestamp only; no supervisor role, email, or queue yet
 3. **Pagination** — client-side only (fine for typical caseload sizes)
 4. **Server-side table filtering** — not implemented; all list data loaded on page render
+5. **No email delivery** — there is no mail provider; fill links must be copied or exported as CSV and sent by hand, including for batches
+6. **Batch completions are noisy** — one bell notification per questionnaire (no batch-level digest), and one AI summary regeneration per submission, so a large batch landing at once clusters both
+7. **New top-level authenticated routes need a `middleware.ts` matcher entry** — the `(dashboard)` layout's session check is a backstop, so omitting it fails quietly: the page still redirects, but the sign-in `callbackUrl` deep link is lost
 
 ---
 
@@ -278,4 +307,4 @@ flowchart TB
 
 ## Summary
 
-APAS is a production-shaped clinical assessment tool: secure patient links, automated scoring on validated instruments, severity alerting, AI-assisted review summaries, and a polished clinician UI. Recent work focused on notifications, responsive data tables, header UX fixes, and completing the patient questionnaire and dashboard polish phases.
+APAS is a production-shaped clinical assessment tool: secure patient links, automated scoring on validated instruments, severity alerting, AI-assisted review summaries, and a polished clinician UI. Recent work separated sessions from questionnaires, then added batch sends — one questionnaire set fanned out to many patients, each still receiving their own private link — alongside notifications, responsive data tables, and the dashboard polish phases.
