@@ -2,7 +2,7 @@
 
 **Product name:** APAS (Clinical Overwatch)  
 **Repository:** `psychology-test`  
-**Last updated:** 22 July 2026
+**Last updated:** 27 July 2026
 
 ---
 
@@ -12,7 +12,7 @@ APAS is a clinical assessment platform for psychologists and clinicians. It lets
 
 - Manage a de-identified patient caseload
 - Send secure questionnaire links to patients (no patient login required), one patient at a time or as a batch across many
-
+- Issue questionnaires with or without an appointment behind them
 - Score validated instruments automatically (PHQ-9, GAD-7, BDI-II, and more)
 - Review severity alerts, item-level responses, and AI-generated clinical summaries
 - Build custom scales and severity thresholds
@@ -34,7 +34,7 @@ Patients complete assessments on mobile-friendly forms via a unique token link. 
 | Charts | Recharts |
 | AI summaries | Anthropic Claude API (`/api/narrative`) |
 | Toasts | Sonner |
-| Tests | Jest (62 tests across 10 suites) |
+| Tests | Jest (73 tests across 11 suites) |
 
 ---
 
@@ -46,7 +46,7 @@ Patients complete assessments on mobile-friendly forms via a unique token link. 
 /auth/verify-email       ├──> /patients ──> /patients/[id] ──> /patients/[id]/sessions/[sessionId]
                          │                                            └──> …/questionnaires/[questionnaireId]
                          ├──> /batches ──> /batches/[batchId] ──> (per-patient session above)
-                         │              └──> /batches/new
+                         │              └──> /batches/new[?kind=direct]
                          ├──> /scales ──> /scales/[id]
                          │              └──> /scales/new (wizard)
                          │
@@ -58,6 +58,7 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 - **Patients** — searchable patient list, profile with score history chart, session list, notes
 - **Batches** — send one questionnaire set to many patients at once; filter the caseload by severity or time since last assessment, then track completion as a group
 - **Session detail** — an appointment: title, reason, date; the questionnaires attached to it, one shared fill link, session notes
+- **Direct sends** — questionnaires issued straight to a patient with no appointment: pick the scales, get the link. Listed in their own "Sent questionnaires" section on the patient page
 - **Questionnaire detail** — item scores, severity badges, AI clinical summary, Mark Reviewed / Escalate actions, questionnaire notes
 - **Scales** — library instruments (read-only) + custom scales; 3-step builder for new scales
 
@@ -73,7 +74,7 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 - **User** — clinician accounts
 - **Patient** — anonymous ID (e.g. P-001), optional display name
 - **Scale / ScaleItem / SeverityThreshold** — instrument definitions and scoring rules
-- **ClinicalSession** — an appointment: title, reason, date, status. Owns the single fill link (token + expiry) shared by every questionnaire in it
+- **ClinicalSession** — an appointment (`kind: APPOINTMENT`) or a direct send (`kind: DIRECT`). Owns the single fill link (token + expiry) shared by every questionnaire in it
 - **SessionBatch** — a group of sessions created together from one authoring action; owns no token and no patient
 - **Questionnaire** — one scale administered within a session; pending/completed/expired
 - **QuestionnaireResponse** — scores, severity, `reviewedAt`, `escalatedAt`
@@ -82,6 +83,12 @@ Patient (no login) ──────┴──> /fill/[token] ──> /fill/[tok
 
 A session is not a questionnaire. One session holds many questionnaires, the
 patient receives one link for all of them, and consent is captured once.
+
+A direct send is the same record with `kind: DIRECT`. The token, consent
+capture, scoring and notification deep links are all session-shaped, so a
+separate table would have forked every one of them; `kind` decides only what the
+clinician sees. A direct send has no clinician-authored title or date — it is
+named after its scales and stamped with the moment it was sent.
 
 A batch is not a session either. The fill token lives on `ClinicalSession` and a
 session belongs to one patient, so batching fans out into one session — and one
@@ -170,6 +177,14 @@ Sessions used to *be* questionnaires — creating one forced a scale choice up
 front. Split into `ClinicalSession` (the appointment) and `Questionnaire` (a
 scale within it), with one fill link per session and notes at all three levels.
 
+### 9. Questionnaires outside a session
+
+Direct sends: "Send questionnaire" on a patient hands back a fill link with no
+appointment booked, and `/batches/new?kind=direct` does the same across many
+patients. Backed by `ClinicalSession.kind`, so the fill flow, scoring, alerts
+and notifications were untouched. Full write-up in
+[`docs/direct-sends-report.md`](direct-sends-report.md).
+
 ### 8. Batch questionnaires
 
 One authoring action across many patients, plus four session-screen fixes
@@ -210,6 +225,7 @@ lib/
   alert-rules.ts   # Severity / SI detection
   seed-scales.ts   # Library scale definitions
   batch-filters.ts # Pure caseload filtering for batch selection
+  direct-sends.ts  # Title derivation + rolled-up status for appointment-free sends
   batches.ts       # Batch progress + shared Prisma include
   session-links.ts # Token renewal (shared by single-session and batch renew)
   patient-summary.ts
@@ -255,6 +271,7 @@ Build: `yarn build` (if stale cache errors: `rm -rf .next && yarn dev`)
 | Notifications | `__tests__/lib/notifications.test.ts` |
 | Scale scoring | `__tests__/lib/scale-scoring.test.ts` |
 | Batch selection filters | `__tests__/lib/batch-filters.test.ts` |
+| Direct send titles + status | `__tests__/lib/direct-sends.test.ts` |
 | Tokens / passwords / anonymous IDs | `__tests__/lib/*.test.ts` |
 
 ---
@@ -265,7 +282,7 @@ Build: `yarn build` (if stale cache errors: `rm -rf .next && yarn dev`)
 2. **Escalate to Supervisor** — timestamp only; no supervisor role, email, or queue yet
 3. **Pagination** — client-side only (fine for typical caseload sizes)
 4. **Server-side table filtering** — not implemented; all list data loaded on page render
-5. **No email delivery** — there is no mail provider; fill links must be copied or exported as CSV and sent by hand, including for batches
+5. **No email delivery** — there is no mail provider; fill links must be copied or exported as CSV and sent by hand, including for batches and direct sends
 6. **Batch completions are noisy** — one bell notification per questionnaire (no batch-level digest), and one AI summary regeneration per submission, so a large batch landing at once clusters both
 7. **New top-level authenticated routes need a `middleware.ts` matcher entry** — the `(dashboard)` layout's session check is a backstop, so omitting it fails quietly: the page still redirects, but the sign-in `callbackUrl` deep link is lost
 

@@ -266,13 +266,16 @@ export async function reconcileOperationalNotifications(
       .map((q) => q.scale.name)
       .join(", ")
     const label = `${clinicalSession.patient.anonymousId} — ${clinicalSession.title}`
+    // A direct send has no appointment, so calling its link a "session link"
+    // would send the clinician looking for something that never existed.
+    const linkNoun = clinicalSession.kind === "DIRECT" ? "Questionnaire" : "Session"
 
     if (isTokenExpired(clinicalSession.tokenExpiresAt)) {
       await createNotification({
         userId,
         type: NotificationType.LINK_EXPIRED,
         dedupeKey: `session:${clinicalSession.id}:link-expired`,
-        title: "Session link expired",
+        title: `${linkNoun} link expired`,
         body: `${label}: ${pendingCount} questionnaire${pendingCount === 1 ? "" : "s"} (${scales}) not completed. Renew the link.`,
         href,
         patientId: clinicalSession.patientId,
@@ -292,7 +295,7 @@ export async function reconcileOperationalNotifications(
         userId,
         type: NotificationType.LINK_EXPIRING_SOON,
         dedupeKey: `session:${clinicalSession.id}:link-expiring`,
-        title: "Session link expiring soon",
+        title: `${linkNoun} link expiring soon`,
         body: `${label}: link expires within 24 hours with ${pendingCount} questionnaire${pendingCount === 1 ? "" : "s"} outstanding.`,
         href,
         patientId: clinicalSession.patientId,

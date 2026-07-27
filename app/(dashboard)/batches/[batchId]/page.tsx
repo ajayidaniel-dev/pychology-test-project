@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { isTokenExpired } from "@/lib/token"
 import { batchProgress, findOwnedBatch } from "@/lib/batches"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -93,6 +94,8 @@ export default async function BatchDetailPage({
     ),
   ]
 
+  const isDirect = batch.kind === "DIRECT"
+
   const percent =
     progress.patientCount > 0
       ? Math.round((progress.completedCount / progress.patientCount) * 100)
@@ -117,8 +120,19 @@ export default async function BatchDetailPage({
 
         <PageHeader
           hideTitleOnMobile
-          title={batch.title}
-          description={`${new Date(batch.scheduledAt).toLocaleString(undefined, {
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              {batch.title}
+              {isDirect && (
+                <Badge variant="secondary" className="font-normal">
+                  Direct
+                </Badge>
+              )}
+            </span>
+          }
+          description={`${isDirect ? "Sent " : ""}${new Date(
+            batch.scheduledAt,
+          ).toLocaleString(undefined, {
             dateStyle: "medium",
             timeStyle: "short",
           })} · ${scaleNames.join(", ") || "No questionnaires"}`}

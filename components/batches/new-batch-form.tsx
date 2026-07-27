@@ -15,11 +15,12 @@ import { EmptyState } from "@/components/layout/empty-state"
 import { SectionHeader } from "@/components/layout/section-header"
 import { BatchCriteriaBar } from "@/components/batches/batch-criteria-bar"
 import { BatchPatientPicker } from "@/components/batches/batch-patient-picker"
-import { BatchScalePicker } from "@/components/batches/batch-scale-picker"
-import type { BatchScale } from "@/components/batches/batch-scale-picker"
+import { ScaleMultiPicker } from "@/components/scales/scale-multi-picker"
+import type { PickableScale } from "@/components/scales/scale-multi-picker"
 import { filterPatientsForBatch, type BatchCriteria } from "@/lib/batch-filters"
 import { MAX_BATCH_PATIENTS } from "@/lib/batches"
 import type { PatientListItem } from "@/lib/patient-summary"
+import { cn } from "@/lib/utils"
 
 /** `datetime-local` wants `YYYY-MM-DDTHH:mm` in local time, not an ISO string. */
 function toLocalInputValue(date: Date): string {
@@ -27,13 +28,57 @@ function toLocalInputValue(date: Date): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16)
 }
 
-interface NewBatchFormProps {
-  patients: PatientListItem[]
-  scales: BatchScale[]
+/**
+ * Radio in behaviour, card in appearance — the choice changes what the rest of
+ * the form asks for, so it needs more room than a bare radio label.
+ */
+function KindOption({
+  selected,
+  onSelect,
+  title,
+  description,
+}: {
+  selected: boolean
+  onSelect: () => void
+  title: string
+  description: string
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      className={cn(
+        "rounded-lg border p-3 text-left transition-colors",
+        "hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        selected ? "border-primary bg-accent/40" : "border-border",
+      )}
+    >
+      <span className="block text-sm font-medium">{title}</span>
+      <span className="mt-0.5 block text-xs text-muted-foreground">
+        {description}
+      </span>
+    </button>
+  )
 }
 
-export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
+interface NewBatchFormProps {
+  patients: PatientListItem[]
+  scales: PickableScale[]
+  /** Which kind the page was opened for. Switchable here, so it is only a default. */
+  defaultKind?: BatchKind
+}
+
+type BatchKind = "APPOINTMENT" | "DIRECT"
+
+export function NewBatchForm({
+  patients,
+  scales,
+  defaultKind = "APPOINTMENT",
+}: NewBatchFormProps) {
   const router = useRouter()
+  const [kind, setKind] = useState<BatchKind>(defaultKind)
   const [title, setTitle] = useState("")
   const [reason, setReason] = useState("")
   const [scheduledAt, setScheduledAt] = useState(() =>
@@ -59,9 +104,12 @@ export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
 
   const overLimit = selectedPatientIds.length > MAX_BATCH_PATIENTS
 
+  // A direct batch has no appointment, so it has nothing to be titled or dated:
+  // the server names it after its scales and stamps it with the send time.
+  const isDirect = kind === "DIRECT"
+
   const canSubmit =
-    title.trim().length > 0 &&
-    scheduledAt.length > 0 &&
+    (isDirect || (title.trim().length > 0 && scheduledAt.length > 0)) &&
     selectedPatientIds.length > 0 &&
     selectedScaleIds.length > 0 &&
     !overLimit &&
@@ -74,9 +122,14 @@ export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: title.trim(),
+        kind,
+        ...(isDirect
+          ? {}
+          : {
+              title: title.trim(),
+              scheduledAt: new Date(scheduledAt).toISOString(),
+            }),
         reason: reason.trim() || undefined,
-        scheduledAt: new Date(scheduledAt).toISOString(),
         collectDetails,
         patientIds: selectedPatientIds,
         scaleIds: selectedScaleIds,
@@ -91,9 +144,9 @@ export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
 
     const batch = await res.json()
     toast.success(
-      `Batch created for ${selectedPatientIds.length} patient${
-        selectedPatientIds.length === 1 ? "" : "s"
-      }`,
+      `${isDirect ? "Sent to" : "Batch created for"} ${
+        selectedPatientIds.length
+      } patient${selectedPatientIds.length === 1 ? "" : "s"}`,
     )
     router.push(`/batches/${batch.id}`)
   }
@@ -115,33 +168,59 @@ export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
           <SectionHeader title="Details" />
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="batch-title">Title</Label>
-            <Input
-              id="batch-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Q3 depression re-screen…"
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">
-              Every patient&apos;s session gets this title.
-            </p>
-          </div>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">What are you sending?</legend>
+            <div
+              role="radiogroup"
+              aria-label="What are you sending?"
+              className="grid gap-2 sm:grid-cols-2"
+            >
+              <KindOption
+                selected={!isDirect}
+                onSelect={() => setKind("APPOINTMENT")}
+                title="Appointments"
+                description="Books a session for each patient, with questionnaires attached."
+              />
+              <KindOption
+                selected={isDirect}
+                onSelect={() => setKind("DIRECT")}
+                title="Questionnaires only"
+                description="No appointment — each patient just gets a link to fill in."
+              />
+            </div>
+          </fieldset>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="batch-date">Date and time</Label>
-            <Input
-              id="batch-date"
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Shared across the batch. Individual sessions stay editable
-              afterwards.
-            </p>
-          </div>
+          {!isDirect && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="batch-title">Title</Label>
+                <Input
+                  id="batch-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Q3 depression re-screen…"
+                  autoFocus
+                />
+                <p className="text-xs text-muted-foreground">
+                  Every patient&apos;s session gets this title.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="batch-date">Date and time</Label>
+                <Input
+                  id="batch-date"
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Shared across the batch. Individual sessions stay editable
+                  afterwards.
+                </p>
+              </div>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="batch-reason">
@@ -195,7 +274,7 @@ export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
               description="Add a scale before sending a batch."
             />
           ) : (
-            <BatchScalePicker
+            <ScaleMultiPicker
               scales={scales}
               selectedIds={selectedScaleIds}
               onChange={setSelectedScaleIds}
@@ -256,10 +335,12 @@ export function NewBatchForm({ patients, scales }: NewBatchFormProps) {
           className="w-full sm:w-auto"
         >
           {loading
-            ? "Creating…"
-            : `Create batch${
+            ? isDirect
+              ? "Sending…"
+              : "Creating…"
+            : `${isDirect ? "Send" : "Create batch"}${
                 selectedPatientIds.length > 0
-                  ? ` for ${selectedPatientIds.length}`
+                  ? ` ${isDirect ? "to " : "for "}${selectedPatientIds.length}`
                   : ""
               }`}
         </Button>

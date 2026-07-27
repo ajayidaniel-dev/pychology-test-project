@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
-import { Layers, Plus } from "lucide-react"
+import { Layers, Plus, Send } from "lucide-react"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
@@ -37,17 +37,26 @@ export default async function BatchesPage() {
   const rows: BatchListItem[] = batches.map((batch) => ({
     id: batch.id,
     title: batch.title,
+    kind: batch.kind,
     scheduledAt: batch.scheduledAt,
     ...batchProgress(batch.sessions),
   }))
 
   const newBatchButton = (
-    <Button asChild size="sm" className="min-h-11 sm:min-h-0">
-      <Link href="/batches/new">
-        <Plus className="size-4" />
-        New batch
-      </Link>
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-0">
+        <Link href="/batches/new?kind=direct">
+          <Send className="size-4" />
+          Send questionnaires
+        </Link>
+      </Button>
+      <Button asChild size="sm" className="min-h-11 sm:min-h-0">
+        <Link href="/batches/new">
+          <Plus className="size-4" />
+          New batch
+        </Link>
+      </Button>
+    </div>
   )
 
   return (
@@ -63,7 +72,7 @@ export default async function BatchesPage() {
         <EmptyState
           icon={<Layers className="size-5" />}
           title="No batches yet"
-          description="Send the same questionnaires to several patients at once. Each patient still gets their own private link."
+          description="Send the same questionnaires to several patients at once — as booked appointments, or as links on their own. Each patient still gets their own private link."
           action={
             <Button asChild>
               <Link href="/batches/new">Create first batch</Link>

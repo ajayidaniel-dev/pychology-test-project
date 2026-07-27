@@ -47,6 +47,8 @@ interface SessionActionsProps {
   scheduledAt: Date
   status: string
   linkExpired: boolean
+  /** DIRECT sends have no appointment, so they are worded — and edited — differently. */
+  kind?: string
 }
 
 export function SessionActions({
@@ -57,7 +59,11 @@ export function SessionActions({
   scheduledAt,
   status,
   linkExpired,
+  kind = "APPOINTMENT",
 }: SessionActionsProps) {
+  const isDirect = kind === "DIRECT"
+  // "Session" is the wrong noun for something nobody booked.
+  const noun = isDirect ? "send" : "session"
   const router = useRouter()
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -77,7 +83,7 @@ export function SessionActions({
     })
     setBusy(false)
     if (!res.ok) {
-      toast.error("Couldn't update this session.")
+      toast.error(`Couldn't update this ${noun}.`)
       return false
     }
     toast.success(successMessage)
@@ -90,9 +96,10 @@ export function SessionActions({
       {
         title: draftTitle.trim(),
         reason: draftReason.trim() || null,
-        scheduledAt: new Date(draftDate).toISOString(),
+        // A send's date is when it went out — there is nothing to reschedule.
+        ...(isDirect ? {} : { scheduledAt: new Date(draftDate).toISOString() }),
       },
-      "Session updated",
+      isDirect ? "Send updated" : "Session updated",
     )
     if (ok) setEditOpen(false)
   }
@@ -102,10 +109,10 @@ export function SessionActions({
     const res = await fetch(endpoint, { method: "DELETE" })
     if (!res.ok) {
       setBusy(false)
-      toast.error("Couldn't delete this session.")
+      toast.error(`Couldn't delete this ${noun}.`)
       return
     }
-    toast.success("Session deleted")
+    toast.success(isDirect ? "Send deleted" : "Session deleted")
     router.push(`/patients/${patientId}`)
     router.refresh()
   }
@@ -118,7 +125,7 @@ export function SessionActions({
             variant="outline"
             size="icon"
             className="size-9"
-            aria-label="Session actions"
+            aria-label={isDirect ? "Send actions" : "Session actions"}
           >
             <MoreHorizontal className="size-4" />
           </Button>
@@ -140,10 +147,15 @@ export function SessionActions({
           )}
           {status !== "CANCELLED" && (
             <DropdownMenuItem
-              onClick={() => patch({ status: "CANCELLED" }, "Session cancelled")}
+              onClick={() =>
+                patch(
+                  { status: "CANCELLED" },
+                  isDirect ? "Send cancelled" : "Session cancelled",
+                )
+              }
             >
               <Ban className="size-4" />
-              Cancel session
+              {isDirect ? "Cancel send" : "Cancel session"}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
@@ -152,7 +164,7 @@ export function SessionActions({
             onClick={() => setDeleteOpen(true)}
           >
             <Trash2 className="size-4" />
-            Delete session
+            {isDirect ? "Delete send" : "Delete session"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -160,7 +172,7 @@ export function SessionActions({
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit session</DialogTitle>
+            <DialogTitle>{isDirect ? "Edit send" : "Edit session"}</DialogTitle>
           </DialogHeader>
           <div className="mt-2 space-y-4">
             <div className="space-y-1.5">
@@ -171,15 +183,17 @@ export function SessionActions({
                 onChange={(e) => setDraftTitle(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-session-date">Date and time</Label>
-              <Input
-                id="edit-session-date"
-                type="datetime-local"
-                value={draftDate}
-                onChange={(e) => setDraftDate(e.target.value)}
-              />
-            </div>
+            {!isDirect && (
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-session-date">Date and time</Label>
+                <Input
+                  id="edit-session-date"
+                  type="datetime-local"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="edit-session-reason">
                 Reason{" "}
@@ -206,7 +220,7 @@ export function SessionActions({
             </Button>
             <Button
               onClick={onSaveEdit}
-              disabled={!draftTitle.trim() || !draftDate || busy}
+              disabled={!draftTitle.trim() || (!isDirect && !draftDate) || busy}
               className="w-full sm:w-auto"
             >
               {busy ? "Saving…" : "Save changes"}
@@ -218,9 +232,11 @@ export function SessionActions({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete session?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {isDirect ? "Delete send?" : "Delete session?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the session along with every questionnaire
+              This permanently deletes the {noun} along with every questionnaire
               in it, their responses, and their notes. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -230,7 +246,7 @@ export function SessionActions({
               onClick={onDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {busy ? "Deleting…" : "Delete session"}
+              {busy ? "Deleting…" : isDirect ? "Delete send" : "Delete session"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

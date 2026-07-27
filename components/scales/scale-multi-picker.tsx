@@ -3,15 +3,15 @@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 
-export interface BatchScale {
+export interface PickableScale {
   id: string
   name: string
   description: string | null
   isLibrary: boolean
 }
 
-interface BatchScalePickerProps {
-  scales: BatchScale[]
+interface ScaleMultiPickerProps {
+  scales: PickableScale[]
   selectedIds: string[]
   onChange: (ids: string[]) => void
 }
@@ -23,7 +23,7 @@ function Group({
   onToggle,
 }: {
   label: string
-  scales: BatchScale[]
+  scales: PickableScale[]
   selectedIds: string[]
   onToggle: (id: string, checked: boolean) => void
 }) {
@@ -64,14 +64,15 @@ function Group({
 }
 
 /**
- * Every selected scale is attached to every patient's session, in the order
- * shown — the batch sends one identical questionnaire set to everyone.
+ * Picks the questionnaire set for a send. Selection order is preserved: it
+ * becomes the order the patient answers them in, and the order they are named
+ * in a direct send's title.
  */
-export function BatchScalePicker({
+export function ScaleMultiPicker({
   scales,
   selectedIds,
   onChange,
-}: BatchScalePickerProps) {
+}: ScaleMultiPickerProps) {
   function onToggle(id: string, checked: boolean) {
     onChange(checked ? [...selectedIds, id] : selectedIds.filter((s) => s !== id))
   }

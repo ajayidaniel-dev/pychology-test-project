@@ -11,7 +11,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/layout/page-header"
 import { CopyLinkButton } from "@/components/sessions/copy-link-button"
-import { SessionStatusBadge } from "@/components/sessions/status-badges"
+import {
+  SendStatusBadge,
+  SessionStatusBadge,
+} from "@/components/sessions/status-badges"
+import type { SendStatus } from "@/lib/direct-sends"
 import { SessionActions } from "@/components/sessions/session-actions"
 
 interface SessionHeaderProps {
@@ -25,6 +29,10 @@ interface SessionHeaderProps {
   token: string
   linkExpired: boolean
   hasPendingQuestionnaires: boolean
+  /** APPOINTMENT | DIRECT — a direct send was never booked, only sent. */
+  kind?: string
+  /** Rolled-up state of a direct send. Ignored for appointments. */
+  sendStatus?: SendStatus
 }
 
 export function SessionHeader({
@@ -38,7 +46,10 @@ export function SessionHeader({
   token,
   linkExpired,
   hasPendingQuestionnaires,
+  kind = "APPOINTMENT",
+  sendStatus = "pending",
 }: SessionHeaderProps) {
+  const isDirect = kind === "DIRECT"
   const formattedDate = new Date(scheduledAt).toLocaleString(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -71,10 +82,14 @@ export function SessionHeader({
         title={
           <span className="flex flex-wrap items-center gap-2">
             {title}
-            <SessionStatusBadge status={status} />
+            {isDirect ? (
+              <SendStatusBadge status={sendStatus} />
+            ) : (
+              <SessionStatusBadge status={status} />
+            )}
           </span>
         }
-        description={formattedDate}
+        description={isDirect ? `Sent ${formattedDate}` : formattedDate}
         actions={
           <SessionActions
             patientId={patientId}
@@ -84,6 +99,7 @@ export function SessionHeader({
             scheduledAt={scheduledAt}
             status={status}
             linkExpired={linkExpired}
+            kind={kind}
           />
         }
       />

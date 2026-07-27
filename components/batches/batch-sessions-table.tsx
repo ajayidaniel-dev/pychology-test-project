@@ -4,9 +4,9 @@ import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { TanStackDataTable } from "@/components/data-table/data-table"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CopyLinkButton } from "@/components/sessions/copy-link-button"
+import { SendStatusBadge } from "@/components/sessions/status-badges"
 
 export type BatchSessionStatus = "completed" | "pending" | "expired"
 
@@ -19,25 +19,6 @@ export interface BatchSessionRow {
   status: BatchSessionStatus
   completedCount: number
   questionnaireCount: number
-}
-
-function StatusBadge({ status }: { status: BatchSessionStatus }) {
-  if (status === "completed") {
-    return (
-      <Badge variant="outline" className="border-severity-low/40 text-severity-low">
-        Completed
-      </Badge>
-    )
-  }
-  if (status === "expired") return <Badge variant="secondary">Expired</Badge>
-  return (
-    <Badge
-      variant="outline"
-      className="border-severity-moderate/40 text-severity-moderate"
-    >
-      Pending
-    </Badge>
-  )
 }
 
 export function BatchSessionsTable({ rows }: { rows: BatchSessionRow[] }) {
@@ -68,7 +49,7 @@ export function BatchSessionsTable({ rows }: { rows: BatchSessionRow[] }) {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Status" />
       ),
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      cell: ({ row }) => <SendStatusBadge status={row.original.status} />,
     },
     {
       id: "progress",
@@ -123,7 +104,7 @@ export function BatchSessionsTable({ rows }: { rows: BatchSessionRow[] }) {
                 </p>
               )}
             </div>
-            <StatusBadge status={row.status} />
+            <SendStatusBadge status={row.status} />
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
             {row.completedCount} of {row.questionnaireCount} answered

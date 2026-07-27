@@ -132,10 +132,17 @@ model Patient {
 /// Questionnaires hang off it — a session is not itself a questionnaire.
 /// The fill link is session-level, so one link walks the patient through every
 /// questionnaire attached to that session.
+///
+/// A DIRECT row is the same record used for a send with no appointment behind
+/// it: questionnaires straight to the patient. It carries a token, consent and
+/// questionnaires exactly like an appointment — `kind` only decides how the
+/// clinician sees it, so the fill flow, scoring and notifications never have to
+/// care which one they are looking at. `scheduledAt` is the moment it was sent.
 model ClinicalSession {
   id             String                @id @default(cuid())
   patientId      String
   psychologistId String
+  kind           SessionKind           @default(APPOINTMENT)
   title          String
   reason         String?
   scheduledAt    DateTime
@@ -160,6 +167,7 @@ model ClinicalSession {
   notifications  Notification[]
 
   @@index([patientId, scheduledAt])
+  @@index([patientId, kind])
   @@index([batchId])
 }
 
@@ -172,12 +180,15 @@ model ClinicalSession {
 /// sessions, responses, and notes it produced are clinical records and outlive
 /// it.
 model SessionBatch {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   psychologistId String
+  /// Matches the kind of every session it created: an appointment batch or a
+  /// direct send to many patients.
+  kind           SessionKind @default(APPOINTMENT)
   title          String
   reason         String?
   scheduledAt    DateTime
-  createdAt      DateTime @default(now())
+  createdAt      DateTime    @default(now())
 
   psychologist User              @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
   sessions     ClinicalSession[]
@@ -251,6 +262,13 @@ enum QuestionnaireStatus {
   PENDING
   COMPLETED
   EXPIRED
+}
+
+/// APPOINTMENT — booked with a patient, questionnaires attached to it.
+/// DIRECT — questionnaires sent on their own, no appointment.
+enum SessionKind {
+  APPOINTMENT
+  DIRECT
 }
 
 enum ClinicalSessionStatus {

@@ -18,7 +18,11 @@ export const metadata: Metadata = {
   title: "New batch",
 }
 
-export default async function NewBatchPage() {
+export default async function NewBatchPage({
+  searchParams,
+}: {
+  searchParams: { kind?: string }
+}) {
   const session = await getServerSession(authOptions)
   if (!session) redirect("/auth/signin")
 
@@ -39,6 +43,11 @@ export default async function NewBatchPage() {
     }),
   ])
 
+  // /batches/new?kind=direct opens straight into the questionnaire-only mode;
+  // the form still lets the clinician switch.
+  const defaultKind =
+    searchParams.kind?.toUpperCase() === "DIRECT" ? "DIRECT" : "APPOINTMENT"
+
   const patientList = shapePatientList(
     patients.map((p) => ({
       ...p,
@@ -49,7 +58,7 @@ export default async function NewBatchPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="New batch"
+        title={defaultKind === "DIRECT" ? "Send to several patients" : "New batch"}
         description="One questionnaire set, sent to several patients at once."
         hideTitleOnMobile
       />
@@ -63,7 +72,11 @@ export default async function NewBatchPage() {
         </Button>
       </div>
 
-      <NewBatchForm patients={patientList} scales={scales} />
+      <NewBatchForm
+        patients={patientList}
+        scales={scales}
+        defaultKind={defaultKind}
+      />
     </div>
   )
 }

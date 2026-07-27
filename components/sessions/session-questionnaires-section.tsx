@@ -21,6 +21,8 @@ interface SessionQuestionnairesSectionProps {
   questionnaires: SessionQuestionnaireRow[]
   token: string
   linkExpired: boolean
+  /** APPOINTMENT | DIRECT — only the copy differs. */
+  kind?: string
 }
 
 export function SessionQuestionnairesSection({
@@ -29,7 +31,10 @@ export function SessionQuestionnairesSection({
   questionnaires,
   token,
   linkExpired,
+  kind = "APPOINTMENT",
 }: SessionQuestionnairesSectionProps) {
+  const isDirect = kind === "DIRECT"
+
   return (
     <Card className="overflow-hidden py-0 shadow-sm">
       <CardHeader className="flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
@@ -41,8 +46,16 @@ export function SessionQuestionnairesSection({
         <CardContent className="p-4 md:p-6">
           <EmptyState
             plain
-            title="No questionnaires in this session"
-            description="Add one or more scales, then send the patient this session's single link."
+            title={
+              isDirect
+                ? "No questionnaires left in this send"
+                : "No questionnaires in this session"
+            }
+            description={
+              isDirect
+                ? "Add one or more scales — they join the link already sent to the patient."
+                : "Add one or more scales, then send the patient this session's single link."
+            }
           />
         </CardContent>
       ) : (

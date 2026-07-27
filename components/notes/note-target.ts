@@ -30,13 +30,23 @@ export const PATIENT_TARGET: NoteTarget = {
   questionnaireId: null,
 }
 
+/**
+ * A direct send's title is just its scale names, which would read identically
+ * to a questionnaire target in the picker. Naming it as a send keeps the two
+ * distinguishable.
+ */
+function targetLabel(session: { title: string; kind?: string }): string {
+  return session.kind === "DIRECT" ? `Sent · ${session.title}` : session.title
+}
+
 export function sessionTarget(session: {
   id: string
   title: string
+  kind?: string
 }): NoteTarget {
   return {
     value: `session:${session.id}`,
-    label: session.title,
+    label: targetLabel(session),
     sessionId: session.id,
     questionnaireId: null,
   }
@@ -44,11 +54,11 @@ export function sessionTarget(session: {
 
 export function questionnaireTarget(
   questionnaire: { id: string; scale: { name: string } },
-  session: { id: string; title: string },
+  session: { id: string; title: string; kind?: string },
 ): NoteTarget {
   return {
     value: `questionnaire:${questionnaire.id}`,
-    label: `${questionnaire.scale.name} · ${session.title}`,
+    label: `${questionnaire.scale.name} · ${targetLabel(session)}`,
     sessionId: session.id,
     questionnaireId: questionnaire.id,
   }

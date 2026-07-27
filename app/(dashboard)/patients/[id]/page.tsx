@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { isTokenExpired } from "@/lib/token"
 import { NewSessionDialog } from "@/components/sessions/new-session-dialog"
+import { SendQuestionnaireDialog } from "@/components/sessions/send-questionnaire-dialog"
+import { sendStatus } from "@/lib/direct-sends"
 import { computeAlerts } from "@/lib/alert-rules"
 import {
   flattenQuestionnaires,
@@ -22,6 +24,8 @@ import type { PatientSummary } from "@/lib/patient-summary-ai"
 import type { IntakeAnswers } from "@/lib/consent"
 import { PatientSessionsSection } from "@/components/patients/patient-sessions-section"
 import type { PatientSessionRow } from "@/components/patients/patient-sessions-section"
+import { PatientDirectSendsSection } from "@/components/patients/patient-direct-sends-section"
+import type { PatientDirectSendRow } from "@/components/patients/patient-direct-sends-section"
 import { NotesSection } from "@/components/notes/notes-section"
 import {
   PATIENT_TARGET,
@@ -131,10 +135,15 @@ export default async function PatientProfilePage({
       ?.intakeAnswers as IntakeAnswers | null) ?? null
   const patientHasDetails = Boolean(patient.fullName && patient.email)
 
-  // Newest session first: the appointment a clinician is most likely acting on.
+  // Newest first: the appointment a clinician is most likely acting on.
   const orderedSessions = [...patient.clinicalSessions].reverse()
 
-  const sessionRows: PatientSessionRow[] = orderedSessions.map((s) => ({
+  // Appointments and direct sends share a table but never a list — a session is
+  // something that happened with the clinician, a send is a link that went out.
+  const appointments = orderedSessions.filter((s) => s.kind !== "DIRECT")
+  const directSends = orderedSessions.filter((s) => s.kind === "DIRECT")
+
+  const sessionRows: PatientSessionRow[] = appointments.map((s) => ({
     id: s.id,
     title: s.title,
     reason: s.reason,
@@ -146,6 +155,17 @@ export default async function PatientProfilePage({
     scaleNames: s.questionnaires.map((q) => q.scale.name),
     token: s.token,
     linkExpired: isTokenExpired(s.tokenExpiresAt),
+  }))
+
+  const directSendRows: PatientDirectSendRow[] = directSends.map((s) => ({
+    id: s.id,
+    title: s.title,
+    sentAt: s.scheduledAt,
+    questionnaireCount: s.questionnaires.length,
+    completedCount: s.questionnaires.filter((q) => q.status === "COMPLETED")
+      .length,
+    status: sendStatus(s),
+    token: s.token,
   }))
 
   // The composer can file a note against the patient, any session, or any
@@ -168,6 +188,10 @@ export default async function PatientProfilePage({
         severity={headerSeverity}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <SendQuestionnaireDialog
+              patientId={patient.id}
+              patientHasDetails={patientHasDetails}
+            />
             <NewSessionDialog
               patientId={patient.id}
               patientHasDetails={patientHasDetails}
@@ -233,6 +257,11 @@ export default async function PatientProfilePage({
       />
 
       <PatientSessionsSection patientId={patient.id} sessions={sessionRows} />
+
+      <PatientDirectSendsSection
+        patientId={patient.id}
+        sends={directSendRows}
+      />
 
       <NotesSection
         patientId={patient.id}

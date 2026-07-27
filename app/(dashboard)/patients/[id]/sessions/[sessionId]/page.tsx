@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma"
 import { isTokenExpired } from "@/lib/token"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
+import { sendStatus } from "@/lib/direct-sends"
 import { SessionHeader } from "@/components/sessions/session-header"
 import { SessionQuestionnairesSection } from "@/components/sessions/session-questionnaires-section"
 import type { SessionQuestionnaireRow } from "@/components/sessions/session-questionnaires-section"
@@ -87,6 +88,11 @@ export default async function SessionDetailPage({
   const linkExpired = isTokenExpired(clinicalSession.tokenExpiresAt)
   const noteTarget = sessionTarget(clinicalSession)
 
+  // The same record backs both, so this page serves a booked appointment and a
+  // direct send alike — only the wording changes.
+  const isDirect = clinicalSession.kind === "DIRECT"
+  const noun = isDirect ? "send" : "session"
+
   return (
     <div className="flex flex-col gap-6">
       <SessionHeader
@@ -100,12 +106,14 @@ export default async function SessionDetailPage({
         token={clinicalSession.token}
         linkExpired={linkExpired}
         hasPendingQuestionnaires={pendingCount > 0}
+        kind={clinicalSession.kind}
+        sendStatus={sendStatus(clinicalSession)}
       />
 
       {linkExpired && pendingCount > 0 && (
         <Alert>
           <Link2Off />
-          <AlertTitle>This session&apos;s link has expired</AlertTitle>
+          <AlertTitle>This {noun}&apos;s link has expired</AlertTitle>
           <AlertDescription>
             {pendingCount} questionnaire{pendingCount === 1 ? "" : "s"} went
             unanswered. Renew the link from the actions menu to send it again.
@@ -119,14 +127,15 @@ export default async function SessionDetailPage({
         questionnaires={rows}
         token={clinicalSession.token}
         linkExpired={linkExpired || clinicalSession.status === "CANCELLED"}
+        kind={clinicalSession.kind}
       />
 
       <NotesSection
         patientId={params.id}
         defaultTarget={noteTarget}
         targets={[noteTarget]}
-        title="Session notes"
-        emptyDescription="Nothing recorded for this session yet."
+        title={isDirect ? "Notes" : "Session notes"}
+        emptyDescription={`Nothing recorded for this ${noun} yet.`}
       />
     </div>
   )

@@ -101,8 +101,8 @@ export function AddQuestionnaireDialog({
         <DialogHeader>
           <DialogTitle>Add questionnaire</DialogTitle>
           <DialogDescription>
-            It joins this session&apos;s existing link — the patient completes
-            everything in one sitting.
+            It joins the link already sent — the patient completes everything
+            in one sitting.
           </DialogDescription>
         </DialogHeader>
 

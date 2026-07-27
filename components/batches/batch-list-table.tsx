@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge"
 export interface BatchListItem {
   id: string
   title: string
+  /** APPOINTMENT | DIRECT — a direct batch booked nothing, it only sent links. */
+  kind: string
   scheduledAt: Date
   patientCount: number
   completedCount: number
@@ -30,7 +32,16 @@ const columns: ColumnDef<BatchListItem>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Batch" />
     ),
-    cell: ({ row }) => <span className="font-medium">{row.original.title}</span>,
+    cell: ({ row }) => (
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-medium">{row.original.title}</span>
+        {row.original.kind === "DIRECT" && (
+          <Badge variant="secondary" className="shrink-0 font-normal">
+            Direct
+          </Badge>
+        )}
+      </div>
+    ),
   },
   {
     accessorKey: "scheduledAt",
@@ -88,7 +99,14 @@ export function BatchListTable({ batches }: { batches: BatchListItem[] }) {
           className="block min-h-18 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="font-semibold">{row.title}</p>
+            <p className="min-w-0 font-semibold">
+              {row.title}
+              {row.kind === "DIRECT" && (
+                <span className="ml-2 align-middle text-xs font-normal text-muted-foreground">
+                  Direct
+                </span>
+              )}
+            </p>
             <Badge variant="secondary" className="font-normal">
               {row.patientCount}
             </Badge>

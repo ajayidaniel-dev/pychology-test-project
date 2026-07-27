@@ -49,8 +49,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Appointments and direct sends share a table but are separate lists in the
+  // UI, so callers say which they want. No `kind` means everything.
+  const kindParam = req.nextUrl.searchParams.get('kind')?.toUpperCase()
+  const kind =
+    kindParam === 'APPOINTMENT' || kindParam === 'DIRECT' ? kindParam : undefined
+
   const sessions = await prisma.clinicalSession.findMany({
-    where: { patientId: params.id, psychologistId: session.user.id },
+    where: { patientId: params.id, psychologistId: session.user.id, kind },
     include: {
       questionnaires: {
         include: { response: true, scale: { select: { id: true, name: true } } },
