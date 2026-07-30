@@ -43,3 +43,6 @@ prisma/*.db-journal
 # misc
 *.log
 .eslintcache
+
+# Local visual-check output (may contain patient data)
+screenshots/

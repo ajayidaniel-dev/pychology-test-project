@@ -37,52 +37,82 @@
   --sidebar-accent-foreground: oklch(0.97 0.008 250);
   --sidebar-border: oklch(0.26 0.03 255);
   --sidebar-ring: oklch(0.55 0.16 250);
+  /* Severity FILL — meters, borders, tinted backgrounds. Not text. */
   --severity-critical: oklch(0.577 0.245 27.325);
   --severity-high: oklch(0.68 0.19 45);
   --severity-moderate: oklch(0.75 0.15 75);
   --severity-low: oklch(0.65 0.15 145);
-  --auth-panel: oklch(0.16 0.035 255);
-  --auth-panel-foreground: oklch(0.97 0.008 250);
-  --auth-panel-muted: oklch(0.68 0.025 255);
+  /* Severity INK — text only. A colour cannot meet 4.5:1 against a 15% tint of
+     itself at any hue, so severity text needs its own darker ramp. Verified by
+     scripts/check-contrast.mjs; do not hand-edit without re-running it. */
+  --severity-critical-ink: oklch(0.5 0.2 27.325);
+  --severity-high-ink: oklch(0.52 0.145 45);
+  --severity-moderate-ink: oklch(0.52 0.108 75);
+  --severity-low-ink: oklch(0.485 0.145 145);
+  /* Motion. Product register: 150-250ms, ease-out only, no bounce. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 100ms;
+  --duration-base: 150ms;
+  --duration-slow: 250ms;
+
+  /* Semantic stacking order. Never use arbitrary z-index values. */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
 }
 
 .dark {
-  --background: oklch(0.08 0.02 240);
+  /* Surface ramp is spaced by perceptual lightness (OKLCH dL), not WCAG ratio —
+     the ratio formula compresses toward black and reports ~1.0 for every
+     near-black pair regardless of how separated it reads.
+     dL: card-bg 0.045, border-bg 0.145, border-card 0.100. */
+  --background: oklch(0.1 0.022 240);
   --foreground: oklch(0.95 0.01 240);
-  --card: oklch(0.12 0.02 240);
+  --card: oklch(0.145 0.024 240);
   --card-foreground: oklch(0.95 0.01 240);
-  --popover: oklch(0.12 0.02 240);
+  --popover: oklch(0.145 0.024 240);
   --popover-foreground: oklch(0.95 0.01 240);
-  --primary: oklch(0.65 0.18 240);
-  --primary-foreground: oklch(0.08 0.02 240);
-  --secondary: oklch(0.18 0.02 240);
+  --primary: oklch(0.68 0.17 240);
+  --primary-foreground: oklch(0.1 0.022 240);
+  --secondary: oklch(0.205 0.022 240);
   --secondary-foreground: oklch(0.95 0.01 240);
-  --muted: oklch(0.15 0.02 240);
-  --muted-foreground: oklch(0.65 0.02 240);
-  --accent: oklch(0.22 0.05 220);
+  --muted: oklch(0.185 0.022 240);
+  --muted-foreground: oklch(0.7 0.02 240);
+  --accent: oklch(0.24 0.05 220);
   --accent-foreground: oklch(0.95 0.01 240);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.95 0.01 240);
-  --border: oklch(0.18 0.02 240);
-  --input: oklch(0.18 0.02 240);
-  --ring: oklch(0.65 0.18 240);
+  --destructive: oklch(0.575 0.21 27.325);
+  --destructive-foreground: oklch(0.98 0.01 240);
+  --border: oklch(0.245 0.022 240);
+  --input: oklch(0.225 0.022 240);
+  --ring: oklch(0.68 0.17 240);
   --chart-1: oklch(0.65 0.18 240);
   --chart-2: oklch(0.75 0.15 220);
   --chart-3: oklch(0.85 0.12 200);
   --chart-4: oklch(0.7 0.2 260);
   --chart-5: oklch(0.8 0.16 280);
-  --sidebar: oklch(0.12 0.03 255);
+  --sidebar: oklch(0.13 0.03 255);
   --sidebar-foreground: oklch(0.95 0.01 250);
   --sidebar-primary: oklch(0.65 0.18 250);
-  --sidebar-primary-foreground: oklch(0.08 0.02 250);
-  --sidebar-accent: oklch(0.18 0.035 255);
+  --sidebar-primary-foreground: oklch(0.1 0.022 250);
+  --sidebar-accent: oklch(0.2 0.035 255);
   --sidebar-accent-foreground: oklch(0.95 0.01 250);
-  --sidebar-border: oklch(0.22 0.03 255);
+  --sidebar-border: oklch(0.26 0.03 255);
   --sidebar-ring: oklch(0.65 0.18 250);
   --severity-critical: oklch(0.577 0.245 27.325);
   --severity-high: oklch(0.72 0.17 45);
   --severity-moderate: oklch(0.78 0.14 75);
   --severity-low: oklch(0.7 0.14 145);
+  /* Ink lightens in dark mode; same rule, mirrored. */
+  --severity-critical-ink: oklch(0.66 0.2 27.325);
+  --severity-high-ink: oklch(0.7 0.19 45);
+  --severity-moderate-ink: oklch(0.72 0.15 75);
+  --severity-low-ink: oklch(0.68 0.15 145);
 }
 
 @theme inline {
@@ -128,9 +158,15 @@
   --color-severity-high: var(--severity-high);
   --color-severity-moderate: var(--severity-moderate);
   --color-severity-low: var(--severity-low);
-  --color-auth-panel: var(--auth-panel);
-  --color-auth-panel-foreground: var(--auth-panel-foreground);
-  --color-auth-panel-muted: var(--auth-panel-muted);
+  --color-severity-critical-ink: var(--severity-critical-ink);
+  --color-severity-high-ink: var(--severity-high-ink);
+  --color-severity-moderate-ink: var(--severity-moderate-ink);
+  --color-severity-low-ink: var(--severity-low-ink);
+  /* Literals, not var() — under @theme inline a self-referential name would
+     resolve to itself. The :root copies above serve hand-written CSS. */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @layer base {
@@ -149,6 +185,20 @@
   input[type='number'] {
     -moz-appearance: textfield;
     appearance: textfield;
+  }
+
+  /* Reduced motion is a baseline, not a per-component opt-in. Animations
+     collapse to instant; nothing is gated on a transition completing, so no
+     content can end up stuck hidden. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -176,6 +226,31 @@
     [data-slot='sidebar-content'] a[data-sidebar='menu-button'] {
       transition-duration: 0.01ms;
     }
+  }
+}
+
+/* Auth: one quiet settle on arrival. Auth is a threshold moment rather than a
+   task surface, so a single entrance is warranted where the app's working
+   screens get none. Applied to the centred block as a whole, never staggered
+   per element — that choreography is what the product register bans.
+
+   `both` fill plus the global reduced-motion override means the content
+   resolves to its final visible state instantly when motion is suppressed; it
+   is never gated on the animation running. */
+@layer components {
+  .auth-enter {
+    animation: auth-enter 400ms var(--ease-out-quart) both;
+  }
+}
+
+@keyframes auth-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

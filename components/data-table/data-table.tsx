@@ -207,11 +207,17 @@ export function TanStackDataTable<T>({
         </div>
       ) : (
         <Table className="table-fixed">
-          <TableHeader>
+          {/*
+            No grey header band. A filled bar reads as spreadsheet chrome; an
+            instrument's column labels sit on the same surface as the data and
+            are separated by a rule, not a fill. Sticky so the labels survive a
+            long caseload.
+          */}
+          <TableHeader className="sticky top-0 z-(--z-sticky) bg-card">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
-                className="border-b-0 bg-muted/50 hover:bg-muted/50"
+                className="border-b hover:bg-transparent"
               >
                 {headerGroup.headers.map((header) => (
                   <TableHead
@@ -219,7 +225,10 @@ export function TanStackDataTable<T>({
                     className={cn(
                       // group/th drives the sort-affordance reveal in
                       // DataTableColumnHeader.
-                      "group/th h-11 px-4 text-muted-foreground first:pl-6 last:pr-6",
+                      "group/th h-10 px-4 text-muted-foreground first:pl-6 last:pr-6",
+                      // Hairline column rules: at 25+ rows they are what keeps
+                      // your eye in the right column.
+                      "border-l border-border/40 first:border-l-0",
                       header.column.id === "actions" && "w-12 px-2",
                       (header.column.columnDef.meta as { className?: string } | undefined)
                         ?.className,
@@ -302,8 +311,10 @@ export function TanStackDataTable<T>({
                         key={cell.id}
                         className={cn(
                           "px-4 first:pl-6 last:pr-6",
-                          cell.column.id === "actions" && "relative z-20 w-12 px-2",
-                          cell.column.id === "select" && "relative z-20",
+                          "border-l border-border/40 first:border-l-0",
+                          cell.column.id === "actions" &&
+                            "relative z-(--z-dropdown) w-12 px-2",
+                          cell.column.id === "select" && "relative z-(--z-dropdown)",
                           (cell.column.columnDef.meta as { className?: string } | undefined)
                             ?.className,
                         )}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -11,9 +11,9 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PasswordInput } from "@/components/ui/password-input"
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { FormErrorAlert } from "@/components/ui/form-error-alert"
+import { AuthCard } from "@/components/auth/auth-card"
 import {
   Form,
   FormControl,
@@ -60,7 +60,6 @@ export function SignInForm() {
   const [bannersDismissed, setBannersDismissed] = useState(false)
   const [redirecting, setRedirecting] = useState(false)
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle")
-  const errorRef = useRef<HTMLDivElement>(null)
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -69,12 +68,6 @@ export function SignInForm() {
 
   const { isSubmitting } = form.formState
   const pending = isSubmitting || redirecting
-
-  // Move focus to the error so keyboard users land on the explanation, not a
-  // silently re-enabled button.
-  useEffect(() => {
-    if (serverError || emailNotVerified) errorRef.current?.focus()
-  }, [serverError, emailNotVerified])
 
   async function onSubmit(data: FormData) {
     setServerError(null)
@@ -98,6 +91,8 @@ export function SignInForm() {
       return
     }
 
+    // Held true through navigation: clearing it would flash the idle button
+    // back in before the new route paints.
     setRedirecting(true)
     router.push(safeCallbackUrl(callbackUrl))
   }
@@ -121,147 +116,129 @@ export function SignInForm() {
     }
   }
 
+  const arrivalNotice = !bannersDismissed
+    ? registered
+      ? { title: "Account created", body: "Sign in below with your new credentials." }
+      : verified
+        ? { title: "Email verified", body: "You can sign in now." }
+        : reset
+          ? { title: "Password updated", body: "Sign in with your new password." }
+          : null
+    : null
+
+  const banner = emailNotVerified ? (
+    <Alert variant="destructive">
+      <AlertCircle />
+      <AlertTitle>Email not verified</AlertTitle>
+      <AlertDescription className="flex flex-col items-start gap-2">
+        <p>Verify your email address before signing in.</p>
+        {resendState === "sent" ? (
+          <p className="font-medium">Verification email sent — check your inbox.</p>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={resendVerification}
+            disabled={resendState === "sending"}
+          >
+            {resendState === "sending" ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Sending…
+              </>
+            ) : (
+              "Resend verification email"
+            )}
+          </Button>
+        )}
+      </AlertDescription>
+    </Alert>
+  ) : serverError ? (
+    <FormErrorAlert title="Sign-in failed" message={serverError} />
+  ) : arrivalNotice ? (
+    <Alert>
+      <CheckCircle2 />
+      <AlertTitle>{arrivalNotice.title}</AlertTitle>
+      <AlertDescription>{arrivalNotice.body}</AlertDescription>
+    </Alert>
+  ) : null
+
   return (
-    <Card className="w-full max-w-md border shadow-sm">
-      <CardHeader>
-        <h1 data-slot="card-title" className="text-2xl leading-none font-semibold">
-          Sign in to APAS
-        </h1>
-        <CardDescription>Enter your credentials to continue</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {registered && !bannersDismissed && (
-            <Alert>
-              <CheckCircle2 />
-              <AlertTitle>Account created</AlertTitle>
-              <AlertDescription>Sign in below with your new credentials.</AlertDescription>
-            </Alert>
-          )}
+    <AuthCard
+      title="Sign in to APAS"
+      description="Enter your credentials to continue."
+      banner={banner}
+      focusOnChange={serverError ?? (emailNotVerified || null)}
+      footer={
+        <>
+          No account?{" "}
+          <Link
+            href="/auth/signup"
+            className="font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none rounded-sm"
+          >
+            Create one
+          </Link>
+        </>
+      }
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    autoFocus
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          {verified && !bannersDismissed && (
-            <Alert>
-              <CheckCircle2 />
-              <AlertTitle>Email verified</AlertTitle>
-              <AlertDescription>You can sign in now.</AlertDescription>
-            </Alert>
-          )}
-
-          {reset && !bannersDismissed && (
-            <Alert>
-              <CheckCircle2 />
-              <AlertTitle>Password updated</AlertTitle>
-              <AlertDescription>Sign in with your new password.</AlertDescription>
-            </Alert>
-          )}
-
-          {emailNotVerified && (
-            <div
-              ref={errorRef}
-              tabIndex={-1}
-              className="rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-            <Alert variant="destructive">
-              <AlertCircle />
-              <AlertTitle>Email not verified</AlertTitle>
-              <AlertDescription className="space-y-2">
-                <p>Verify your email address before signing in.</p>
-                {resendState === "sent" ? (
-                  <p className="font-medium">
-                    Verification email sent — check your inbox.
-                  </p>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={resendVerification}
-                    disabled={resendState === "sending"}
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <div className="flex items-center justify-between gap-2">
+                  <FormLabel>Password</FormLabel>
+                  <Link
+                    href="/auth/forgot-password"
+                    className="rounded-sm text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                   >
-                    {resendState === "sending" ? (
-                      <>
-                        <Loader2 className="animate-spin" />
-                        Sending…
-                      </>
-                    ) : (
-                      "Resend verification email"
-                    )}
-                  </Button>
-                )}
-              </AlertDescription>
-            </Alert>
-            </div>
-          )}
+                    Forgot password?
+                  </Link>
+                </div>
+                <FormControl>
+                  <PasswordInput autoComplete="current-password" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-          {serverError && !emailNotVerified && (
-            <div
-              ref={errorRef}
-              tabIndex={-1}
-              className="rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              <FormErrorAlert title="Sign-in failed" message={serverError} />
-            </div>
-          )}
-
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" autoComplete="email" autoFocus {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <div className="flex items-center justify-between">
-                      <FormLabel>Password</FormLabel>
-                      <Link
-                        href="/auth/forgot-password"
-                        className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                      >
-                        Forgot password?
-                      </Link>
-                    </div>
-                    <FormControl>
-                      <PasswordInput autoComplete="current-password" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <Button type="submit" className="w-full" disabled={pending}>
-                {pending ? (
-                  <>
-                    <Loader2 className="animate-spin" />
-                    Signing in…
-                  </>
-                ) : (
-                  "Sign in"
-                )}
-              </Button>
-            </form>
-          </Form>
-
-          <p className="text-center text-sm text-muted-foreground">
-            No account?{" "}
-            <Button variant="link" className="-my-2 h-auto px-1 py-2" asChild>
-              <Link href="/auth/signup">Create one</Link>
-            </Button>
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+          <Button type="submit" className="mt-1 w-full" disabled={pending}>
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Signing in…
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </Button>
+        </form>
+      </Form>
+    </AuthCard>
   )
 }

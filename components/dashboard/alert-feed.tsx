@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { SeverityBadge } from "@/components/ui/severity-badge"
+import { ScoreReadout } from "@/components/ui/score-readout"
 import { EmptyState } from "@/components/layout/empty-state"
 import { computeAlerts, getScaleMeta, getThresholdCrossed } from "@/lib/alert-rules"
 import type { SeverityLevel } from "@/components/ui/severity-badge"
@@ -28,6 +29,21 @@ function toSeverityLevel(severity: string | null): SeverityLevel {
   return "low"
 }
 
+/**
+ * Endorsed ideation with a sub-threshold score has no severity band — the score
+ * genuinely is low. Rendering a band here would either lie ("Low", next to a
+ * safety warning) or corrupt the psychometrics ("Critical", for a score of 4).
+ * It gets its own mark instead.
+ */
+function SafetyFlagBadge() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 self-start justify-self-start rounded-full border border-severity-critical/25 bg-severity-critical/15 px-2 py-0.5 text-xs font-medium text-severity-critical-ink">
+      <AlertTriangle className="size-3" aria-hidden />
+      Safety flag
+    </span>
+  )
+}
+
 export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
   const alerts = sessions
     .filter((s) => s.response)
@@ -46,10 +62,19 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
         threshold: getThresholdCrossed(s.scale, result.severity),
       }
     })
-    .filter((a) => a.severity !== null)
+    // Ideation is an independent alert condition: a sub-threshold score with
+    // item 9 endorsed still belongs in this queue. Filtering on severity alone
+    // silently dropped exactly the cases the row's own safety warning was
+    // written to display.
+    .filter((a) => a.severity !== null || a.suicidalIdeation)
     .sort((a, b) => {
       const order = { critical: 0, high: 1, moderate: 2 }
-      const rank = order[a.severity!] - order[b.severity!]
+      // Ideation sorts with critical regardless of band.
+      const rankOf = (a: { severity: string | null; suicidalIdeation: boolean }) =>
+        a.suicidalIdeation
+          ? 0
+          : order[a.severity as keyof typeof order] ?? 3
+      const rank = rankOf(a) - rankOf(b)
       if (rank !== 0) return rank
       return (
         (b.session.completedAt?.getTime() ?? 0) -
@@ -84,7 +109,9 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
         made the queue unscannable. Rows stack below md.
       */}
       <div className="divide-y">
-        {alerts.map(({ session, severity, suicidalIdeation, maxScore, threshold }) => (
+        {alerts.map(({ session, severity, suicidalIdeation, maxScore, threshold }) => {
+          const bandless = severity === null
+          return (
           <div
             key={session.id}
             className="px-4 py-3 transition-colors hover:bg-muted/40 md:px-6"
@@ -96,10 +123,14 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
               <div className="flex items-center gap-3 md:contents">
                 {/* Both needed: self-start stops the pill stretching in the
                     mobile flex row, justify-self-start in the md grid. */}
-                <SeverityBadge
-                  severity={toSeverityLevel(severity)}
-                  className="self-start justify-self-start"
-                />
+                {bandless ? (
+                  <SafetyFlagBadge />
+                ) : (
+                  <SeverityBadge
+                    severity={toSeverityLevel(severity)}
+                    className="self-start justify-self-start"
+                  />
+                )}
                 <span className="text-sm font-medium">
                   {session.patient.anonymousId}
                 </span>
@@ -109,19 +140,16 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
                 {session.scaleName}
               </span>
 
-              <div className="flex items-baseline gap-2 md:justify-end">
-                <span className="font-mono text-sm tabular-nums">
-                  {session.response?.totalScore}
-                  {maxScore !== null && (
-                    <span className="text-muted-foreground"> / {maxScore}</span>
-                  )}
-                </span>
-                {threshold !== null && (
-                  <span className="text-xs whitespace-nowrap text-muted-foreground">
-                    ≥{" "}
-                    <span className="font-mono tabular-nums">{threshold}</span>
-                  </span>
-                )}
+              {/* Same readout as the caseload grid — one score vocabulary
+                  across the app, so a figure means the same thing wherever a
+                  clinician meets it. */}
+              <div className="md:flex md:justify-end">
+                <ScoreReadout
+                  score={session.response?.totalScore ?? null}
+                  maxScore={maxScore}
+                  threshold={threshold}
+                  className="items-start md:items-end"
+                />
               </div>
 
               <div className="flex items-center gap-3 md:justify-end">
@@ -151,13 +179,14 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
 
             {/* Full-width: never compete with the score columns for space. */}
             {suicidalIdeation && (
-              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-severity-critical">
+              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-severity-critical-ink">
                 <AlertTriangle aria-hidden className="size-3.5 shrink-0" />
                 Suicidal ideation endorsed — immediate attention required
               </p>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
     </Card>
   )

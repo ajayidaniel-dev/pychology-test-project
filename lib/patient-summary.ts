@@ -1,4 +1,8 @@
-import { computeAlerts } from "@/lib/alert-rules"
+import {
+  computeAlerts,
+  getScaleMeta,
+  getThresholdCrossed,
+} from "@/lib/alert-rules"
 import type { SeverityLevel } from "@/components/ui/severity-badge"
 
 const SCALE_NAME_TO_ENUM: Record<string, string> = {
@@ -85,12 +89,18 @@ export interface PatientListItem {
   /** Total scores on the latest scale, oldest → newest (same-scale so points are comparable). */
   scoreHistory: number[]
   lastAssessedAt: Date | null
+  /** Maximum possible score for the latest scale; null for custom scales. */
+  latestMaxScore: number | null
+  /** Lowest score of the band this result fell into; null when not derivable. */
+  latestThreshold: number | null
 }
 
 export function shapePatientListItem(patient: PatientWithSessions): PatientListItem {
   const completed = patient.questionnaires.filter((s) => s.response)
   const latest = completed.at(-1)
   let severity: SeverityLevel | null = null
+  let latestMaxScore: number | null = null
+  let latestThreshold: number | null = null
 
   if (latest?.response && latest.scale) {
     const itemScores = latest.response.itemScores as Record<string, number>
@@ -99,9 +109,14 @@ export function shapePatientListItem(patient: PatientWithSessions): PatientListI
       scaleEnum,
       latest.response.totalScore,
       itemScores,
-      latest.response.severity,
+      // computeAlerts takes `string | undefined`; the column is nullable.
+      latest.response.severity ?? undefined,
     )
     severity = toSeverityLevel(result.severity)
+    // Known instruments only. Custom scales have no published cutoffs, and the
+    // table renders the bare figure rather than inventing a denominator.
+    latestMaxScore = getScaleMeta(scaleEnum)?.maxScore ?? null
+    latestThreshold = getThresholdCrossed(scaleEnum, result.severity)
   }
 
   // Delta and trend compare like with like: only scores on the latest scale.
@@ -127,6 +142,8 @@ export function shapePatientListItem(patient: PatientWithSessions): PatientListI
         : null,
     scoreHistory,
     lastAssessedAt: latest?.response?.completedAt ?? null,
+    latestMaxScore,
+    latestThreshold,
   }
 }
 
@@ -150,6 +167,8 @@ export function toCaseloadPatient(
   | "delta"
   | "scoreHistory"
   | "lastAssessedAt"
+  | "latestMaxScore"
+  | "latestThreshold"
 > {
   return {
     id: item.id,
@@ -161,6 +180,8 @@ export function toCaseloadPatient(
     delta: item.delta,
     scoreHistory: item.scoreHistory,
     lastAssessedAt: item.lastAssessedAt,
+    latestMaxScore: item.latestMaxScore,
+    latestThreshold: item.latestThreshold,
   }
 }
 

@@ -5,8 +5,10 @@ import { redirect } from "next/navigation"
 export const metadata: Metadata = {
   title: "Dashboard",
 }
+import Link from "next/link"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
+import { Button } from "@/components/ui/button"
 import { StatusBand } from "@/components/dashboard/status-band"
 import { AlertFeed } from "@/components/dashboard/alert-feed"
 import { CaseloadSection } from "@/components/dashboard/caseload-section"
@@ -19,7 +21,7 @@ import {
   PATIENT_QUESTIONNAIRES_INCLUDE,
   flattenQuestionnaires,
 } from "@/lib/patient-summary"
-import { computeAlerts } from "@/lib/alert-rules"
+import { deriveAlertCounts } from "@/lib/alerts"
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions)
@@ -73,21 +75,20 @@ export default async function DashboardPage() {
     completedAt: q.response?.completedAt ?? null,
   }))
 
-  const alertCounts = currentSessions.reduce(
-    (acc, s) => {
-      const itemScores = s.response!.itemScores as Record<string, number>
-      const scaleEnum = scaleNameToEnum(s.scale.name)
-      const { severity } = computeAlerts(
-        scaleEnum,
-        s.response!.totalScore,
-        itemScores,
-        s.response!.severity,
-      )
-      if (severity === "critical") acc.critical++
-      if (severity) acc.open++
-      return acc
-    },
-    { open: 0, critical: 0 },
+  // Routed through lib/alerts so the dashboard, the sidebar badge, and anything
+  // added later share one definition of "critical".
+  const alertCounts = deriveAlertCounts(
+    currentSessions.map((q) => ({
+      totalScore: q.response!.totalScore,
+      itemScores: q.response!.itemScores,
+      severity: q.response!.severity,
+      completedAt: q.response!.completedAt ?? null,
+      questionnaire: {
+        scaleId: q.scaleId,
+        scale: { name: q.scale.name },
+        session: { patientId: q.patientId },
+      },
+    })),
   )
 
   const caseloadPatients = shapePatientList(
@@ -98,6 +99,58 @@ export default async function DashboardPage() {
   )
     .map(toCaseloadPatient)
     .sort(bySeverityThenRecency)
+
+  // First run: a band of zeroes and an empty alert queue tell a new clinician
+  // nothing about what to do. Replace the whole dashboard with the one action
+  // that unblocks every other surface.
+  if (patients.length === 0) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          title={`Welcome to APAS, ${session.user.name}`}
+          description="Two steps to your first tracked assessment."
+        />
+
+        <div className="rounded-xl border bg-card p-6 md:p-8">
+          <ol className="flex flex-col gap-6">
+            <li className="flex gap-4">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 font-mono text-xs font-semibold text-primary">
+                1
+              </span>
+              <div className="flex flex-col items-start gap-2">
+                <p className="font-medium">Add a patient</p>
+                <p className="max-w-prose text-sm text-muted-foreground">
+                  Patients are pseudonymous by default — APAS assigns an ID, and
+                  identifying details are only collected later with explicit
+                  consent.
+                </p>
+                <Button asChild>
+                  <Link href="/patients">Add your first patient</Link>
+                </Button>
+              </div>
+            </li>
+
+            <li className="flex gap-4">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-xs font-semibold text-muted-foreground">
+                2
+              </span>
+              <div className="flex flex-col items-start gap-2">
+                <p className="font-medium">Send an assessment</p>
+                <p className="max-w-prose text-sm text-muted-foreground">
+                  Send a secure link for PHQ-9, GAD-7, BDI-II, or any scale you
+                  build yourself. Responses are scored on arrival and anything
+                  crossing a clinical threshold is raised here.
+                </p>
+                <Button variant="outline" asChild>
+                  <Link href="/scales">Browse the scale library</Link>
+                </Button>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">

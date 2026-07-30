@@ -2,14 +2,16 @@ import dynamic from "next/dynamic"
 import type { Metadata } from "next"
 import { getServerSession } from "next-auth"
 import { redirect, notFound } from "next/navigation"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, ClipboardList } from "lucide-react"
+import { formatDistanceToNowStrict } from "date-fns"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 import { isTokenExpired } from "@/lib/token"
 import { NewSessionDialog } from "@/components/sessions/new-session-dialog"
 import { SendQuestionnaireDialog } from "@/components/sessions/send-questionnaire-dialog"
 import { sendStatus } from "@/lib/direct-sends"
-import { computeAlerts } from "@/lib/alert-rules"
+import { computeAlerts, getScaleMeta } from "@/lib/alert-rules"
+import { hasCurrentIdeation } from "@/lib/alerts"
 import {
   flattenQuestionnaires,
   PATIENT_QUESTIONNAIRES_INCLUDE,
@@ -19,6 +21,8 @@ import { computeChartTrend, TREND_LABELS } from "@/lib/chart-trend"
 import { PatientActions } from "@/components/patients/patient-actions"
 import { PatientDetailsCard } from "@/components/patients/patient-details-card"
 import { PatientProfileHeader } from "@/components/patients/patient-profile-header"
+import { PatientRecordTabs } from "@/components/patients/patient-record-tabs"
+import { EmptyState } from "@/components/layout/empty-state"
 import { PatientSummaryCard } from "@/components/patients/patient-summary-card"
 import type { PatientSummary } from "@/lib/patient-summary-ai"
 import type { IntakeAnswers } from "@/lib/consent"
@@ -125,6 +129,25 @@ export default async function PatientProfilePage({
     ? toSeverityLevel(latestAlerts.severity)
     : null
 
+  // Ideation is checked across every current assessment, not just the newest
+  // questionnaire. Keying the safety banner to `latest` meant that submitting
+  // any other instrument after a PHQ-9 silently hid the flag — verified against
+  // real data, where a patient's summary reported endorsed ideation while the
+  // page showed no banner at all.
+  const currentIdeation = hasCurrentIdeation(
+    completed.map((q) => ({
+      totalScore: q.response!.totalScore,
+      itemScores: q.response!.itemScores,
+      severity: q.response!.severity,
+      completedAt: q.response!.completedAt ?? null,
+      questionnaire: {
+        scaleId: q.scaleId,
+        scale: { name: q.scale.name },
+        session: { patientId: patient.id },
+      },
+    })),
+  )
+
   const latestConsented = [...patient.clinicalSessions]
     .reverse()
     .find((s) => s.consentAt)
@@ -178,6 +201,16 @@ export default async function PatientProfilePage({
     ]),
   ]
 
+  const latestScaleMeta = latest?.scale ? scaleNameToEnum(latest.scale.name) : null
+  const latestMax = latestScaleMeta ? getScaleMeta(latestScaleMeta)?.maxScore : null
+  const latestSummary =
+    latest?.response && latest.scale
+      ? `${latest.scale.name} ${latest.response.totalScore}${latestMax ? `/${latestMax}` : ""}`
+      : null
+  const lastAssessedLabel = latest?.response?.completedAt
+    ? formatDistanceToNowStrict(latest.response.completedAt, { addSuffix: true })
+    : null
+
   return (
     <div className="flex flex-col gap-6">
       <PatientProfileHeader
@@ -186,6 +219,8 @@ export default async function PatientProfilePage({
         fullName={patient.fullName}
         completedCount={completed.length}
         severity={headerSeverity}
+        latestSummary={latestSummary}
+        lastAssessedLabel={lastAssessedLabel}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <SendQuestionnaireDialog
@@ -204,7 +239,11 @@ export default async function PatientProfilePage({
         }
       />
 
-      {latestAlerts?.suicidalIdeation && (
+      {/*
+        Stays above the tabs, never inside one. A safety warning behind a tab is
+        a warning nobody sees.
+      */}
+      {currentIdeation && (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
           <AlertTitle>Suicidal ideation endorsed</AlertTitle>
@@ -215,59 +254,79 @@ export default async function PatientProfilePage({
         </Alert>
       )}
 
-      {completed.length > 0 && (
-        <PatientSummaryCard
-          completedCount={completed.length}
-          summary={(patient.summary as PatientSummary | null) ?? null}
-          generatedAt={patient.summaryGeneratedAt ?? null}
-        />
-      )}
+      <PatientRecordTabs
+        assessmentCount={completed.length}
+        overview={
+          <>
+            {completed.length > 0 && (
+              <PatientSummaryCard
+                completedCount={completed.length}
+                summary={(patient.summary as PatientSummary | null) ?? null}
+                generatedAt={patient.summaryGeneratedAt ?? null}
+              />
+            )}
 
-      {completed.length > 0 && latest && (
-        <Card className="shadow-sm">
-          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-base">
-                Score History — {latest.scale.name}
-              </CardTitle>
-              <CardDescription>
-                Assessments on the same scale for comparable scores
-              </CardDescription>
-            </div>
-            <Badge variant="outline">{TREND_LABELS[trend]}</Badge>
-          </CardHeader>
-          <CardContent className="max-w-3xl">
-            <SessionChart
-              scale={scaleNameToEnum(latest.scale.name)}
-              data={chartData}
+            {completed.length > 0 && latest ? (
+              <Card className="shadow-sm">
+                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <CardTitle className="text-base">
+                      Score history — {latest.scale.name}
+                    </CardTitle>
+                    <CardDescription>
+                      Assessments on the same scale, so scores are comparable
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline">{TREND_LABELS[trend]}</Badge>
+                </CardHeader>
+                <CardContent className="max-w-3xl">
+                  <SessionChart
+                    scale={scaleNameToEnum(latest.scale.name)}
+                    data={chartData}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyState
+                icon={<ClipboardList className="size-5" />}
+                title="No completed assessments yet"
+                description="Send this patient a secure assessment link. Scores, severity, and trend will appear here once the first one comes back."
+              />
+            )}
+          </>
+        }
+        assessments={
+          <>
+            <PatientSessionsSection
+              patientId={patient.id}
+              sessions={sessionRows}
             />
-          </CardContent>
-        </Card>
-      )}
-
-      <PatientDetailsCard
-        fullName={patient.fullName}
-        email={patient.email}
-        phone={patient.phone}
-        dateOfBirth={patient.dateOfBirth}
-        detailsUpdatedAt={patient.detailsUpdatedAt}
-        consentAt={latestConsented?.consentAt ?? null}
-        consentPolicyVersion={latestConsented?.consentPolicyVersion ?? null}
-        intake={latestIntake}
-      />
-
-      <PatientSessionsSection patientId={patient.id} sessions={sessionRows} />
-
-      <PatientDirectSendsSection
-        patientId={patient.id}
-        sends={directSendRows}
-      />
-
-      <NotesSection
-        patientId={patient.id}
-        defaultTarget={PATIENT_TARGET}
-        targets={noteTargets}
-        emptyDescription="Nothing recorded yet. Notes can be filed against the patient, a session, or a single questionnaire."
+            <PatientDirectSendsSection
+              patientId={patient.id}
+              sends={directSendRows}
+            />
+          </>
+        }
+        details={
+          <PatientDetailsCard
+            fullName={patient.fullName}
+            email={patient.email}
+            phone={patient.phone}
+            dateOfBirth={patient.dateOfBirth}
+            detailsUpdatedAt={patient.detailsUpdatedAt}
+            consentAt={latestConsented?.consentAt ?? null}
+            consentPolicyVersion={latestConsented?.consentPolicyVersion ?? null}
+            intake={latestIntake}
+          />
+        }
+        notes={
+          <NotesSection
+            patientId={patient.id}
+            defaultTarget={PATIENT_TARGET}
+            targets={noteTargets}
+            emptyDescription="Nothing recorded yet. Notes can be filed against the patient, a session, or a single questionnaire."
+          />
+        }
       />
     </div>
   )

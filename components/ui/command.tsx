@@ -90,7 +90,10 @@ function CommandList({
     <CommandPrimitive.List
       data-slot="command-list"
       className={cn(
-        'max-h-[300px] scroll-py-1 overflow-x-hidden overflow-y-auto',
+        // Grows with the viewport instead of a fixed 300px. At 300px the
+        // palette showed five items on a 900px-tall window and orphaned the
+        // next group heading right at the cut.
+        'max-h-[min(60vh,32rem)] scroll-py-1 overflow-x-hidden overflow-y-auto',
         className,
       )}
       {...props}

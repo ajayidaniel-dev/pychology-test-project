@@ -5,12 +5,11 @@ import Link from "next/link"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { CheckCircle2, Loader2 } from "lucide-react"
+import { Loader2, MailCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { FormErrorAlert } from "@/components/ui/form-error-alert"
+import { AuthCard } from "@/components/auth/auth-card"
 import {
   Form,
   FormControl,
@@ -55,77 +54,97 @@ export function ForgotPasswordForm() {
     }
   }
 
-  return (
-    <Card className="w-full max-w-md border shadow-sm">
-      <CardHeader>
-        <h1 data-slot="card-title" className="text-2xl leading-none font-semibold">
-          Reset your password
-        </h1>
-        <CardDescription>
-          Enter the email you sign in with and we&rsquo;ll send you a reset link.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {sentTo ? (
-            <>
-              <Alert>
-                <CheckCircle2 />
-                <AlertTitle>Check your inbox</AlertTitle>
-                <AlertDescription>
-                  If an account exists for {sentTo}, a reset link is on its way. The
-                  link expires in 1 hour.
-                </AlertDescription>
-              </Alert>
-              <Button variant="outline" className="w-full" asChild>
-                <Link href="/auth/signin">Back to sign in</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              {serverError && (
-                <FormErrorAlert title="Request failed" message={serverError} />
-              )}
-
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Email</FormLabel>
-                        <FormControl>
-                          <Input type="email" autoComplete="email" autoFocus {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button type="submit" className="w-full" disabled={isSubmitting}>
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="animate-spin" />
-                        Sending link…
-                      </>
-                    ) : (
-                      "Send reset link"
-                    )}
-                  </Button>
-                </form>
-              </Form>
-
-              <p className="text-center text-sm text-muted-foreground">
-                Remembered it?{" "}
-                <Button variant="link" className="-my-2 h-auto px-1 py-2" asChild>
-                  <Link href="/auth/signin">Back to sign in</Link>
-                </Button>
+  // Success replaces the form rather than stacking a banner above it: there is
+  // no longer anything to submit, so leaving the field live invites a resend
+  // the rate limiter will reject.
+  if (sentTo) {
+    return (
+      <AuthCard
+        title="Check your inbox"
+        description={
+          <>
+            If an account exists for{" "}
+            <span className="font-medium text-foreground">{sentTo}</span>, a reset
+            link is on its way.
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4" role="status">
+          <div className="flex items-start gap-3 rounded-lg border bg-muted/40 p-3">
+            <MailCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+            <div className="flex flex-col gap-1 text-sm">
+              <p className="font-medium">The link expires in 1 hour.</p>
+              <p className="text-muted-foreground">
+                Not there? Check your spam folder before requesting another.
               </p>
-            </>
-          )}
+            </div>
+          </div>
+
+          <Button variant="outline" className="w-full" asChild>
+            <Link href="/auth/signin">Back to sign in</Link>
+          </Button>
         </div>
-      </CardContent>
-    </Card>
+      </AuthCard>
+    )
+  }
+
+  return (
+    <AuthCard
+      title="Reset your password"
+      description="Enter the email you sign in with and we'll send you a reset link."
+      banner={
+        serverError ? (
+          <FormErrorAlert title="Request failed" message={serverError} />
+        ) : null
+      }
+      focusOnChange={serverError}
+      footer={
+        <>
+          Remembered it?{" "}
+          <Link
+            href="/auth/signin"
+            className="rounded-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            Back to sign in
+          </Link>
+        </>
+      }
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    spellCheck={false}
+                    autoFocus
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <Button type="submit" className="mt-1 w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Sending link…
+              </>
+            ) : (
+              "Send reset link"
+            )}
+          </Button>
+        </form>
+      </Form>
+    </AuthCard>
   )
 }

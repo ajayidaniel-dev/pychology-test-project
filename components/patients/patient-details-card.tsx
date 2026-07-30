@@ -71,6 +71,25 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+/**
+ * Label-above-value in a recessed panel. Identity facts are read as a set —
+ * "who is this person" — so they scan better as parallel columns than as a
+ * stack of rows the eye has to descend one at a time. The inset surface marks
+ * them as consent-gated data distinct from the clinical record around them.
+ */
+function FactPanel({ facts }: { facts: { label: string; value: React.ReactNode }[] }) {
+  return (
+    <dl className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-6 gap-y-4 rounded-lg bg-muted/50 p-4">
+      {facts.map(({ label, value }) => (
+        <div key={label} className="flex min-w-0 flex-col gap-1">
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="min-w-0 text-sm wrap-break-word">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
 export function PatientDetailsCard({
   fullName,
   email,
@@ -107,44 +126,52 @@ export function PatientDetailsCard({
       {(hasIdentity || hasIntake) && (
         <CardContent>
           {hasIdentity && (
-            <dl className="divide-y divide-border/60">
-              {fullName && <Row label="Name" value={fullName} />}
-              {email && (
-                <Row
-                  label="Email"
-                  value={
-                    <a
-                      href={`mailto:${email}`}
-                      className="text-primary hover:underline"
-                    >
-                      {email}
-                    </a>
-                  }
-                />
-              )}
-              {phone && (
-                <Row
-                  label="Phone"
-                  value={
-                    <a
-                      href={`tel:${phone}`}
-                      className="text-primary hover:underline"
-                    >
-                      {phone}
-                    </a>
-                  }
-                />
-              )}
-              {dateOfBirth && (
-                <Row
-                  label="Date of birth"
-                  value={`${formatDate(dateOfBirth)} (age ${ageFrom(dateOfBirth)})`}
-                />
-              )}
-              {detailsUpdatedAt && (
-                <Row label="Updated" value={formatDate(detailsUpdatedAt)} />
-              )}
-            </dl>
+            <FactPanel
+              facts={[
+                ...(fullName ? [{ label: "Name", value: fullName }] : []),
+                ...(email
+                  ? [
+                      {
+                        label: "Email",
+                        value: (
+                          <a
+                            href={`mailto:${email}`}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {email}
+                          </a>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(phone
+                  ? [
+                      {
+                        label: "Phone",
+                        value: (
+                          <a
+                            href={`tel:${phone}`}
+                            className="text-primary underline-offset-4 hover:underline"
+                          >
+                            {phone}
+                          </a>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(dateOfBirth
+                  ? [
+                      {
+                        label: "Date of birth",
+                        value: `${formatDate(dateOfBirth)} · age ${ageFrom(dateOfBirth)}`,
+                      },
+                    ]
+                  : []),
+                ...(detailsUpdatedAt
+                  ? [{ label: "Updated", value: formatDate(detailsUpdatedAt) }]
+                  : []),
+              ]}
+            />
           )}
 
           {hasIntake && intake && (

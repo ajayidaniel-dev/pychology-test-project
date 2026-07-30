@@ -19,6 +19,8 @@ export interface CaseloadPatient {
   delta: number | null
   scoreHistory: number[]
   lastAssessedAt: Date | null
+  latestMaxScore: number | null
+  latestThreshold: number | null
 }
 
 export function CaseloadSection({ patients }: { patients: CaseloadPatient[] }) {

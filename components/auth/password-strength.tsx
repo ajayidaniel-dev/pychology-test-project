@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, X } from "lucide-react"
+import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   getPasswordRequirements,
@@ -13,67 +13,92 @@ interface PasswordStrengthProps {
   className?: string
 }
 
-export function PasswordStrength({ password, show, className }: PasswordStrengthProps) {
+/**
+ * Live requirement feedback for password fields.
+ *
+ * Colour stays inside the system: a single-hue intensity ramp, never
+ * red/amber/green. Those four colours mean patient risk everywhere else in
+ * APAS, and spending them on a password field weakens the one vocabulary that
+ * must never be ambiguous.
+ */
+export function PasswordStrength({
+  password,
+  show,
+  className,
+}: PasswordStrengthProps) {
   if (!show) return null
 
   const requirements = getPasswordRequirements(password)
   const strength = getPasswordStrength(password)
-  const allMet = requirements.every((r) => r.met)
+  const metCount = requirements.filter((r) => r.met).length
 
   return (
     <div
-      className={cn("space-y-3 rounded-lg border bg-muted/40 p-3", className)}
-      aria-live="polite"
+      className={cn("flex flex-col gap-3 rounded-lg border bg-muted/40 p-3", className)}
     >
-      {password.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-muted-foreground">Password strength</span>
-            {strength.label && (
-              <span
-                className={cn(
-                  "font-medium",
-                  strength.label === "Weak" && "text-destructive",
-                  strength.label === "Fair" && "text-amber-600 dark:text-amber-400",
-                  strength.label === "Good" && "text-primary",
-                  strength.label === "Strong" && "text-emerald-600 dark:text-emerald-400",
-                )}
-              >
-                {strength.label}
-              </span>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="font-medium text-muted-foreground">
+            Password strength
+          </span>
+          <span
+            className={cn(
+              "font-medium tabular-nums transition-opacity duration-150 ease-out-quart",
+              strength.label ? "text-foreground opacity-100" : "opacity-0",
             )}
-          </div>
-          <div className="relative h-1.5 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all duration-300 ease-out",
-                strength.colorClass,
-              )}
-              style={{ width: `${strength.score}%` }}
-            />
-          </div>
+          >
+            {strength.label || "—"}
+          </span>
         </div>
-      )}
+        <div
+          className="relative h-1.5 overflow-hidden rounded-full bg-muted"
+          role="progressbar"
+          aria-label="Password strength"
+          aria-valuenow={strength.score}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuetext={strength.label || "No password entered"}
+        >
+          <div
+            className={cn(
+              "h-full rounded-full transition-[width,background-color] duration-250 ease-out-quart",
+              strength.colorClass,
+            )}
+            style={{ width: `${strength.score}%` }}
+          />
+        </div>
+      </div>
 
-      <ul className="space-y-1.5" aria-label="Password requirements">
+      {/* One live region for the whole checklist. Announcing each requirement
+          separately turns a single keystroke into five interruptions. */}
+      <p className="sr-only" aria-live="polite">
+        {metCount} of {requirements.length} password requirements met.
+      </p>
+
+      <ul className="flex flex-col gap-1.5" aria-label="Password requirements">
         {requirements.map((req) => (
           <li key={req.id} className="flex items-center gap-2 text-xs">
             <span
               className={cn(
-                "flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
+                "flex size-4 shrink-0 items-center justify-center rounded-full",
+                "transition-colors duration-150 ease-out-quart",
                 req.met
-                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                  : "bg-muted text-muted-foreground",
+                  ? "bg-primary/15 text-primary"
+                  : "border border-dashed bg-transparent text-transparent",
               )}
             >
-              {req.met ? (
-                <Check className="h-2.5 w-2.5" strokeWidth={3} />
-              ) : (
-                <X className="h-2.5 w-2.5" strokeWidth={3} />
-              )}
+              <Check
+                className={cn(
+                  "size-2.5 transition-transform duration-150 ease-out-quart",
+                  req.met ? "scale-100" : "scale-50",
+                )}
+                strokeWidth={3}
+                aria-hidden
+              />
             </span>
             <span
               className={cn(
+                "transition-colors duration-150 ease-out-quart",
                 req.met ? "text-foreground" : "text-muted-foreground",
               )}
             >
@@ -82,12 +107,6 @@ export function PasswordStrength({ password, show, className }: PasswordStrength
           </li>
         ))}
       </ul>
-
-      {allMet && password.length > 0 && (
-        <p className="text-xs text-emerald-600 dark:text-emerald-400">
-          Password meets all requirements.
-        </p>
-      )}
     </div>
   )
 }
