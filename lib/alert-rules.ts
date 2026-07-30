@@ -7,6 +7,29 @@ export interface AlertResult {
 
 type KnownScale = 'PHQ9' | 'BDI2' | 'GAD7'
 
+/**
+ * Which item carries suicidality, per instrument.
+ *
+ * Explicitly per-instrument rather than positional. "Item 9" is the suicide
+ * item on the PHQ-9 ("Thoughts that you would be better off dead") and on the
+ * BDI-II ("Suicidal Thoughts or Wishes", 0-3, where 2 is "I would like to kill
+ * myself") — but AUDIT item 9 asks about injury from drinking and the PCL-5 has
+ * no suicide item at all, so a positional rule would raise false alarms on
+ * both.
+ *
+ * Any threshold above zero counts: BDI-II 1 is "I have thoughts of killing
+ * myself but I would not carry them out", which is still a disclosure that
+ * warrants review.
+ *
+ * Custom scales are absent by design — there is no way to know which of their
+ * items is a safety item. Declaring it per-item on the scale definition is the
+ * durable fix and needs a schema change.
+ */
+const SUICIDE_ITEM: Record<string, string> = {
+  PHQ9: '9',
+  BDI2: '9',
+}
+
 export function computeAlerts(
   scale: string,
   totalScore: number,
@@ -14,8 +37,9 @@ export function computeAlerts(
   storedSeverity?: string
 ): AlertResult {
   const severity = getSeverity(scale, totalScore) ?? normaliseStoredSeverity(storedSeverity)
+  const safetyItem = SUICIDE_ITEM[scale]
   const suicidalIdeation =
-    scale === 'PHQ9' && (itemScores['9'] ?? 0) > 0
+    safetyItem !== undefined && (itemScores[safetyItem] ?? 0) > 0
 
   return { severity, suicidalIdeation }
 }

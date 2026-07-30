@@ -38,7 +38,8 @@ export default async function PatientsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Patients"
-        description={`${patients.length} patient${patients.length !== 1 ? "s" : ""}`}
+        count={patients.length}
+        description="Your caseload, most concerning current assessment first"
         hideTitleOnMobile
         actions={<NewPatientDialog />}
       />

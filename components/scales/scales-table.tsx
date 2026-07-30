@@ -5,7 +5,6 @@ import { type ColumnDef } from "@tanstack/react-table"
 import { BookOpen, ChevronRight, User } from "lucide-react"
 import { TanStackDataTable } from "@/components/data-table/data-table"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 export interface ScaleTableRow {
@@ -22,15 +21,12 @@ const columns: ColumnDef<ScaleTableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Name" />
     ),
+    // No "Library" badge. The table only ever renders inside a section already
+    // headed "Library Scales" or "My Scales", so the badge repeated a fact the
+    // heading had just stated — on every row of one table and no row of the
+    // other, which is the definition of a chip that carries no information.
     cell: ({ row }) => (
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{row.original.name}</span>
-        {row.original.isLibrary && (
-          <Badge variant="secondary" className="text-xs font-normal">
-            Library
-          </Badge>
-        )}
-      </div>
+      <span className="font-medium">{row.original.name}</span>
     ),
   },
   {
@@ -56,12 +52,15 @@ const columns: ColumnDef<ScaleTableRow>[] = [
   {
     id: "items",
     accessorFn: (row) => row._count?.items ?? 0,
+    meta: { className: "text-right" },
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Items" />
+      <DataTableColumnHeader column={column} title="Items" align="right" />
     ),
+    // Mono tabular-nums, right-aligned: same figure vocabulary as every other
+    // count in the app, so digits stack into one scannable edge.
     cell: ({ row }) => (
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground">
+      <div className="flex items-center justify-end gap-2">
+        <span className="font-mono text-sm tabular-nums text-muted-foreground">
           {row.original._count?.items ?? "—"}
         </span>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
@@ -120,14 +119,7 @@ export function ScalesTable({
                 )}
               </div>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium">{scale.name}</p>
-                  {scale.isLibrary && (
-                    <Badge variant="secondary" className="text-xs font-normal">
-                      Library
-                    </Badge>
-                  )}
-                </div>
+                <p className="text-sm font-medium">{scale.name}</p>
                 {scale.description && (
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {scale.description}

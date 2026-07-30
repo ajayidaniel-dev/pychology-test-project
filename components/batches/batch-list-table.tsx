@@ -59,23 +59,27 @@ const columns: ColumnDef<BatchListItem>[] = [
   },
   {
     accessorKey: "patientCount",
+    meta: { className: "text-right" },
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Patients" />
+      <DataTableColumnHeader column={column} title="Patients" align="right" />
     ),
+    // Was a Badge pill. A count is a figure, not a status — pills here competed
+    // with the severity vocabulary and broke the numeric column edge.
     cell: ({ row }) => (
-      <Badge variant="secondary" className="font-normal">
+      <span className="block text-right font-mono text-sm tabular-nums text-muted-foreground">
         {row.original.patientCount}
-      </Badge>
+      </span>
     ),
   },
   {
     id: "completed",
     accessorFn: (row) => row.completedCount,
+    meta: { className: "text-right" },
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Completed" />
+      <DataTableColumnHeader column={column} title="Completed" align="right" />
     ),
     cell: ({ row }) => (
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-end gap-2">
         <ProgressLabel
           done={row.original.completedCount}
           total={row.original.patientCount}

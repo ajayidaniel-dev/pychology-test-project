@@ -63,7 +63,8 @@ export default async function BatchesPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Batches"
-        description={`${batches.length} batch${batches.length === 1 ? "" : "es"}`}
+        count={batches.length}
+        description="Assessment links sent to several patients at once"
         hideTitleOnMobile
         actions={newBatchButton}
       />

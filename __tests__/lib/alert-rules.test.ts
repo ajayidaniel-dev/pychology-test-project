@@ -41,3 +41,34 @@ describe('computeAlerts', () => {
     expect(result.suicidalIdeation).toBe(false)
   })
 })
+
+describe('suicide-item detection is per-instrument', () => {
+  it('flags PHQ-9 item 9', () => {
+    expect(computeAlerts('PHQ9', 5, { '9': 1 }).suicidalIdeation).toBe(true)
+  })
+
+  it('flags BDI-II item 9 — the Suicidal Thoughts or Wishes item', () => {
+    // Regression: this returned false, so a BDI-II disclosure raised no alert
+    // anywhere in the app.
+    expect(computeAlerts('BDI2', 25, { '9': 2 }).suicidalIdeation).toBe(true)
+  })
+
+  it('flags BDI-II item 9 at the lowest positive score', () => {
+    expect(computeAlerts('BDI2', 12, { '9': 1 }).suicidalIdeation).toBe(true)
+  })
+
+  it('does not flag a zero on a real suicide item', () => {
+    expect(computeAlerts('BDI2', 21, { '9': 0 }).suicidalIdeation).toBe(false)
+    expect(computeAlerts('PHQ9', 8, { '9': 0 }).suicidalIdeation).toBe(false)
+  })
+
+  it('does not flag GAD-7, which has no item 9', () => {
+    expect(computeAlerts('GAD7', 10, { '9': 3 }).suicidalIdeation).toBe(false)
+  })
+
+  it('does not flag instruments whose item 9 means something else', () => {
+    // AUDIT item 9 asks about injury from drinking; PCL-5 has no suicide item.
+    expect(computeAlerts('AUDIT', 19, { '9': 2 }).suicidalIdeation).toBe(false)
+    expect(computeAlerts('PCL5', 51, { '9': 4 }).suicidalIdeation).toBe(false)
+  })
+})

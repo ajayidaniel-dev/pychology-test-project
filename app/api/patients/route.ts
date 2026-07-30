@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
-import { nextAnonymousId } from '@/lib/anonymous-id'
+import { nextAnonymousIdFrom } from '@/lib/anonymous-id'
 import {
   PATIENT_QUESTIONNAIRES_INCLUDE,
   flattenQuestionnaires,
@@ -40,13 +40,16 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   const patient = await prisma.$transaction(async (tx) => {
-    const count = await tx.patient.count({
+    // Derived from the ids already issued, not from the patient count — see
+    // lib/anonymous-id.ts. Counting collides with a live id after any deletion.
+    const existing = await tx.patient.findMany({
       where: { psychologistId: session.user.id },
+      select: { anonymousId: true },
     })
     return tx.patient.create({
       data: {
         displayName: parsed.data.displayName,
-        anonymousId: nextAnonymousId(count),
+        anonymousId: nextAnonymousIdFrom(existing.map((p) => p.anonymousId)),
         psychologistId: session.user.id,
       },
     })

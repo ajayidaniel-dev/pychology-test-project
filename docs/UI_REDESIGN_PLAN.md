@@ -514,23 +514,41 @@ silently hid the flag.
 Signing in and screenshotting every surface (`scripts/visual-check.mjs`)
 surfaced three data-level issues that no amount of UI work fixes.
 
-1. **BDI-II item 9 is not recognised as a suicide item.** `computeAlerts` only
+**Findings 1 and 2 are now fixed and visually verified. Finding 3 is open.**
+
+1. ~~**BDI-II item 9 is not recognised as a suicide item.**~~ **FIXED.** `computeAlerts` only
    checks ideation when `scale === 'PHQ9'`. On the BDI-II, item 9 *is* the
    suicidal-thoughts item. Patient P-004 in the dev database has a BDI-II with
    `item9 = 2` — endorsed suicidal thoughts — and the app raises no safety flag
    anywhere, because the check never runs for that instrument. AUDIT item 9 is
    an injury question and PCL-5 has no suicide item, so the mapping is
    per-instrument, not positional. **This is the most serious finding of the
-   redesign.** Not changed unilaterally: which instruments carry a suicide item
-   is a clinical mapping decision.
+   redesign.**
 
-2. **The caseload shows the newest assessment's severity, not the patient's
-   highest current risk.** P-003's newest result is a PHQ-9 of 7 (mild), so the
+   Fixed via an explicit `SUICIDE_ITEM` map in `lib/alert-rules.ts` — `PHQ9 → 9`
+   and `BDI2 → 9`, any score above zero. Deliberately per-instrument rather than
+   positional: AUDIT item 9 asks about injury from drinking and PCL-5 has no
+   suicide item, so a positional rule would have raised false alarms on both
+   (your data has AUDIT rows with `item9 = 2`). Verified in the browser: P-004
+   now shows "Suicidal ideation endorsed" in the alert queue and a safety banner
+   on the record. **Custom scales still have no detection** — declaring a safety
+   item on the scale definition is the durable fix and needs a schema change.
+
+2. ~~**The caseload shows the newest assessment's severity.**~~ **FIXED.** P-003's newest result is a PHQ-9 of 7 (mild), so the
    caseload renders a moderate meter — while a current PCL-5 of 51 (severe) sits
    in the alert queue on the same screen. For a triage surface whose stated job
    is "who needs my attention right now", showing the most recent rather than
-   the most concerning result understates risk. Fixing it means deciding whether
-   a caseload row represents the latest assessment or the worst current one.
+   the most concerning result understates risk.
+
+   A caseload row now represents the patient's **most concerning current
+   assessment** — scale, score, severity, threshold, and date all drawn from
+   that one result, so nothing within a row can disagree with anything else in
+   it. "Current" is the latest response per instrument; the worst of those wins,
+   ties broken by recency. An assessment endorsing ideation outranks every band
+   including critical, because only it carries a safety action. Verified: P-003
+   now reads `PCL-5 51 · Critical` instead of `PHQ-9 7/27 · Moderate`, matching
+   the alert queue on the same screen. Covered by
+   `__tests__/lib/patient-summary.test.ts`.
 
 3. **An AI patient summary describes assessments that do not exist.** P-004 has
    exactly one completed response (BDI-II, 2026-07-20). Its stored summary,
@@ -541,12 +559,29 @@ surfaced three data-level issues that no amount of UI work fixes.
 
 Lower severity, also observed:
 
-- **`anonymousId` is not unique.** The dev database holds three patients labelled
-  `P-001` and two labelled `P-002`. The command palette, caseload, and alert
-  queue all use it as the human-facing handle.
-- **A React `forwardRef` warning** fires on every page (`SlotClone`, from a Radix
-  `asChild` wrapping a function component). Twelve console errors per run;
-  pre-existing, not introduced by the redesign.
+4. ~~**`anonymousId` is not unique.**~~ **RETRACTED — this finding was wrong.**
+   The duplicates are across four *different* clinicians, each with their own
+   `P-001` series, and the schema already enforces
+   `@@unique([anonymousId, psychologistId])`. Correct behaviour, misread because
+   the probe query was not scoped by clinician.
+
+   Investigating it did surface a real defect, now fixed: `nextAnonymousId`
+   derived the next id from the patient **count**. With `P-001..P-003` on file,
+   deleting `P-002` leaves a count of 2, so the next patient is assigned
+   `P-003` — which still exists. That violates the unique constraint and fails
+   creation with an unhandled 500, and the app has a delete-patient action, so
+   it is reachable. Replaced with `nextAnonymousIdFrom`, which counts up from
+   the highest id already issued and tolerates the historical `P-0001` padding
+   width in your data.
+
+5. ~~**A React `forwardRef` warning.**~~ **FIXED.** `SidebarMenuButton` was a
+   plain function component used as the child of `DropdownMenuTrigger asChild`
+   in `NavUser`. On React 18 that means the ref was genuinely dropped, not just
+   warned about — the dropdown trigger lost anchored positioning and focus
+   return. Converted to `forwardRef`. Console errors went from 12 per run to 1;
+   `/dashboard`, `/patients`, `/scales`, `/batches`, `/settings`, and the
+   patient record with all four tabs now log zero. The single residual is on a
+   path not yet isolated (likely the mobile sidebar sheet).
 
 ### Superseded — earlier open question
 
