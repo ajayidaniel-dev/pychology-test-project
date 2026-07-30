@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react"
 import { useRouter } from "next/navigation"
@@ -103,28 +104,44 @@ function CommandPalette() {
   const [index, setIndex] = useState<SearchIndex>(EMPTY_INDEX)
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle")
 
-  // Loaded on first open, then kept. A clinician who opens the palette twice in
-  // a row should not wait twice.
-  useEffect(() => {
-    if (!open || state !== "idle") return
+  // A ref, not `state`, guards the fetch. Keying the effect on `state` made it
+  // cancel its own request: setState("loading") re-ran the effect, whose cleanup
+  // flipped `cancelled` on the in-flight fetch, and the re-run bailed out
+  // because state was no longer "idle" — so the response was always discarded
+  // and the palette sat on "Loading your workspace…" forever.
+  const startedRef = useRef(false)
+  const mountedRef = useRef(true)
 
-    let cancelled = false
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  // Loaded on first open, then kept. A clinician who opens the palette twice in
+  // a row should not wait twice. Closing the palette mid-flight must not abort:
+  // the index is what the next open needs.
+  useEffect(() => {
+    if (!open || startedRef.current) return
+
+    startedRef.current = true
     setState("loading")
     fetch("/api/navigation/search")
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error("failed"))))
       .then((data: SearchIndex) => {
-        if (cancelled) return
+        if (!mountedRef.current) return
         setIndex(data)
         setState("ready")
       })
       .catch(() => {
-        if (!cancelled) setState("error")
+        if (!mountedRef.current) return
+        // Let the next open retry rather than stranding the clinician on an
+        // error that a reopen cannot clear.
+        startedRef.current = false
+        setState("error")
       })
-
-    return () => {
-      cancelled = true
-    }
-  }, [open, state])
+  }, [open])
 
   const go = useCallback(
     (href: string) => {
@@ -183,7 +200,7 @@ function CommandPalette() {
               {index.patients.map((p) => (
                 <CommandItem
                   key={p.id}
-                  value={`${p.label} ${p.hint ?? ""}`}
+                  value={p.terms}
                   onSelect={() => go(`/patients/${p.id}`)}
                 >
                   <Users />

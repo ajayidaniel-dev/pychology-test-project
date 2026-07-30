@@ -4,7 +4,12 @@ import { authOptions } from "@/lib/auth"
 import prisma from "@/lib/prisma"
 
 export interface SearchIndex {
-  patients: { id: string; label: string; hint: string | null }[]
+  /**
+   * `terms` carries everything the palette should match on but not necessarily
+   * display — a clinician searching "Sarah" is searching the real name, which
+   * is never the visible label.
+   */
+  patients: { id: string; label: string; hint: string | null; terms: string }[]
   scales: { id: string; label: string }[]
   batches: { id: string; label: string; hint: string | null }[]
 }
@@ -28,7 +33,13 @@ export async function GET() {
   const [patients, scales, batches] = await Promise.all([
     prisma.patient.findMany({
       where: { psychologistId },
-      select: { id: true, anonymousId: true, displayName: true },
+      select: {
+        id: true,
+        anonymousId: true,
+        displayName: true,
+        fullName: true,
+        email: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 500,
     }),
@@ -47,13 +58,24 @@ export async function GET() {
   ])
 
   const index: SearchIndex = {
-    patients: patients.map((p) => ({
-      id: p.id,
-      label: p.anonymousId,
+    patients: patients.map((p) => {
       // Display names can be a real person's name, so it is a secondary hint
       // rather than the primary label — the pseudonymous id stays the handle.
-      hint: p.displayName && p.displayName !== p.anonymousId ? p.displayName : null,
-    })),
+      const hint =
+        p.fullName ??
+        (p.displayName && p.displayName !== p.anonymousId ? p.displayName : null)
+
+      return {
+        id: p.id,
+        label: p.anonymousId,
+        hint,
+        // Email is matchable but never rendered: clinicians look people up by
+        // the address they mailed the questionnaire link to.
+        terms: [p.anonymousId, p.displayName, p.fullName, p.email]
+          .filter(Boolean)
+          .join(" "),
+      }
+    }),
     scales: scales.map((s) => ({ id: s.id, label: s.name })),
     batches: batches.map((b) => ({
       id: b.id,
