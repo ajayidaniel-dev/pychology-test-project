@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { resolveUnreviewedForQuestionnaire } from '@/lib/notifications'
 import { z } from 'zod'
 
@@ -17,11 +16,12 @@ function ownedQuestionnaireWhere(params: RouteParams['params'], userId: string) 
 }
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const questionnaire = await prisma.questionnaire.findFirst({
-    where: ownedQuestionnaireWhere(params, session.user.id),
+  const questionnaire = await db.questionnaire.findFirst({
+    where: ownedQuestionnaireWhere(params, ctx.userId),
     include: {
       response: true,
       scale: true,
@@ -39,11 +39,12 @@ const PatchQuestionnaireSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest, { params }: RouteParams) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const questionnaire = await prisma.questionnaire.findFirst({
-    where: ownedQuestionnaireWhere(params, session.user.id),
+  const questionnaire = await db.questionnaire.findFirst({
+    where: ownedQuestionnaireWhere(params, ctx.userId),
     include: { response: true },
   })
 
@@ -55,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   const parsed = PatchQuestionnaireSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const updated = await prisma.questionnaireResponse.update({
+  const updated = await db.questionnaireResponse.update({
     where: { questionnaireId: params.questionnaireId },
     data: { reviewedAt: new Date() },
   })
@@ -66,11 +67,12 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const questionnaire = await prisma.questionnaire.findFirst({
-    where: ownedQuestionnaireWhere(params, session.user.id),
+  const questionnaire = await db.questionnaire.findFirst({
+    where: ownedQuestionnaireWhere(params, ctx.userId),
     select: { id: true, status: true },
   })
   if (!questionnaire) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -84,7 +86,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
     )
   }
 
-  await prisma.questionnaire.delete({ where: { id: params.questionnaireId } })
+  await db.questionnaire.delete({ where: { id: params.questionnaireId } })
 
   return NextResponse.json({ ok: true })
 }

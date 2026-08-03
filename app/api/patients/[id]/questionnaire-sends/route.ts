@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
 import { fillUrlFor } from '@/lib/request-origin'
@@ -19,11 +18,12 @@ const CreateSendSchema = z.object({
 })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: params.id, psychologistId: session.user.id },
+  const patient = await db.patient.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId },
     select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -38,10 +38,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // The ids arrive from the client, so ownership is checked before anything is
   // written — a caller must not be able to attach someone else's private scale.
-  const scales = await prisma.scale.findMany({
+  const scales = await db.scale.findMany({
     where: {
       id: { in: scaleIds },
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
+      OR: [{ isLibrary: true }, { psychologistId: ctx.userId }],
     },
     select: { id: true, name: true },
   })
@@ -53,10 +53,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const nameById = new Map(scales.map((s) => [s.id, s.name]))
   const title = directSendTitle(scaleIds.map((id) => nameById.get(id)!))
 
-  const created = await prisma.clinicalSession.create({
+  const created = await db.clinicalSession.create({
     data: {
       patientId: params.id,
-      psychologistId: session.user.id,
+      practiceId: ctx.practiceId,
+      psychologistId: ctx.userId,
       kind: 'DIRECT',
       title,
       reason: note || null,
@@ -67,7 +68,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       token: generateToken(),
       tokenExpiresAt: tokenExpiresAt(),
       questionnaires: {
-        create: scaleIds.map((scaleId, index) => ({ scaleId, order: index + 1 })),
+        create: scaleIds.map((scaleId, index) => ({
+          practiceId: ctx.practiceId,
+          scaleId,
+          order: index + 1,
+        })),
       },
     },
   })

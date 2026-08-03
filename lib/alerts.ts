@@ -1,6 +1,6 @@
 import { computeAlerts, type AlertResult } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
-import prisma from "@/lib/prisma"
+import type { PrismaLike } from "@/lib/db"
 
 export interface AlertCounts {
   /** Assessments currently sitting at moderate or above. */
@@ -121,8 +121,11 @@ export function deriveAlertCounts(rows: ResponseRow[]): AlertCounts {
  * the ideation flag; if this ever shows up in profiling, that is the field to
  * drop for the count-only path.
  */
-export async function getAlertCounts(psychologistId: string): Promise<AlertCounts> {
-  const rows = await prisma.questionnaireResponse.findMany({
+export async function getAlertCounts(
+  db: PrismaLike,
+  psychologistId: string,
+): Promise<AlertCounts> {
+  const rows = await db.questionnaireResponse.findMany({
     where: { questionnaire: { session: { psychologistId } } },
     select: {
       totalScore: true,

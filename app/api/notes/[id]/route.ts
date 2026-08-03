@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const PatchNoteSchema = z.object({
@@ -9,11 +8,12 @@ const PatchNoteSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const existing = await prisma.note.findFirst({
-    where: { id: params.id, patient: { psychologistId: session.user.id } },
+  const existing = await db.note.findFirst({
+    where: { id: params.id, patient: { psychologistId: ctx.userId } },
     select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const parsed = PatchNoteSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const note = await prisma.note.update({
+  const note = await db.note.update({
     where: { id: params.id },
     data: { body: parsed.data.body },
     include: {
@@ -36,16 +36,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const existing = await prisma.note.findFirst({
-    where: { id: params.id, patient: { psychologistId: session.user.id } },
+  const existing = await db.note.findFirst({
+    where: { id: params.id, patient: { psychologistId: ctx.userId } },
     select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.note.delete({ where: { id: params.id } })
+  await db.note.delete({ where: { id: params.id } })
 
   return NextResponse.json({ ok: true })
 }

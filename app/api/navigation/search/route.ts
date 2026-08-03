@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getPracticeContext, practiceContextFailure } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 
 export interface SearchIndex {
   /**
@@ -23,15 +22,14 @@ export interface SearchIndex {
  * patient identifiers would be a data-isolation failure, not a UI bug.
  */
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const psychologistId = session.user.id
+  const psychologistId = ctx.userId
 
   const [patients, scales, batches] = await Promise.all([
-    prisma.patient.findMany({
+    db.patient.findMany({
       where: { psychologistId },
       select: {
         id: true,
@@ -43,13 +41,13 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       take: 500,
     }),
-    prisma.scale.findMany({
+    db.scale.findMany({
       where: { OR: [{ psychologistId }, { isLibrary: true }] },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
       take: 200,
     }),
-    prisma.sessionBatch.findMany({
+    db.sessionBatch.findMany({
       where: { psychologistId },
       select: { id: true, title: true, scheduledAt: true },
       orderBy: { scheduledAt: "desc" },

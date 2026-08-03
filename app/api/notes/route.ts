@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const CreateNoteSchema = z.object({
@@ -19,8 +18,9 @@ const noteInclude = {
 } as const
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
   const parsed = CreateNoteSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
   const { patientId, body, questionnaireId } = parsed.data
   let sessionId = parsed.data.sessionId ?? null
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: patientId, psychologistId: session.user.id },
+  const patient = await db.patient.findFirst({
+    where: { id: patientId, psychologistId: ctx.userId },
     select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   // A questionnaire target implies its parent session, so the note always
   // resolves to a session even when the caller only sent the questionnaire.
   if (questionnaireId) {
-    const questionnaire = await prisma.questionnaire.findFirst({
+    const questionnaire = await db.questionnaire.findFirst({
       where: { id: questionnaireId, session: { patientId } },
       select: { sessionId: true },
     })
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
     sessionId = questionnaire.sessionId
   } else if (sessionId) {
-    const clinicalSession = await prisma.clinicalSession.findFirst({
+    const clinicalSession = await db.clinicalSession.findFirst({
       where: { id: sessionId, patientId },
       select: { id: true },
     })
@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const note = await prisma.note.create({
+  const note = await db.note.create({
     data: {
-      authorId: session.user.id,
+      practiceId: ctx.practiceId,
+      authorId: ctx.userId,
       patientId,
       sessionId,
       questionnaireId: questionnaireId ?? null,
@@ -70,8 +71,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
   const patientId = req.nextUrl.searchParams.get('patientId')
   if (!patientId) return NextResponse.json({ error: 'patientId required' }, { status: 400 })
@@ -82,10 +84,10 @@ export async function GET(req: NextRequest) {
   // Filters are exact, not cascading: asking for a session's notes returns the
   // ones filed on the session itself, not those on its questionnaires. With no
   // filter you get the patient's whole stream.
-  const notes = await prisma.note.findMany({
+  const notes = await db.note.findMany({
     where: {
       patientId,
-      patient: { psychologistId: session.user.id },
+      patient: { psychologistId: ctx.userId },
       ...(questionnaireId
         ? { questionnaireId }
         : sessionId

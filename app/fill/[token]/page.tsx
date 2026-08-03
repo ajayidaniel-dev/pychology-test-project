@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma"
+import { unscopedDb as prisma } from "@/lib/db"
 import { isTokenExpired } from "@/lib/token"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { FillFlow } from "@/components/questionnaire/fill-flow"

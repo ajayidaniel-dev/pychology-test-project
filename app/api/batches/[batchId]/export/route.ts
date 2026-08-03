@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { fillUrlFor } from '@/lib/request-origin'
 import { isTokenExpired } from '@/lib/token'
 import { findOwnedBatch } from '@/lib/batches'
@@ -24,10 +24,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { batchId: string } },
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const batch = await findOwnedBatch(params.batchId, session.user.id)
+  const batch = await findOwnedBatch(db, params.batchId, ctx.userId)
   if (!batch) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const header = ['anonymousId', 'displayName', 'fillUrl', 'expiresAt', 'status']

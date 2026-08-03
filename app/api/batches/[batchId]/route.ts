@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { isTokenExpired } from '@/lib/token'
 import { renewSessionLink } from '@/lib/session-links'
@@ -11,10 +10,11 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { batchId: string } },
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const batch = await findOwnedBatch(params.batchId, session.user.id)
+  const batch = await findOwnedBatch(db, params.batchId, ctx.userId)
   if (!batch) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   return NextResponse.json(batch)
@@ -31,11 +31,12 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { batchId: string } },
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const existing = await prisma.sessionBatch.findFirst({
-    where: { id: params.batchId, psychologistId: session.user.id },
+  const existing = await db.sessionBatch.findFirst({
+    where: { id: params.batchId, psychologistId: ctx.userId },
     select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -47,7 +48,7 @@ export async function PATCH(
   const { renewExpiredLinks, ...fields } = parsed.data
 
   if (Object.keys(fields).length > 0) {
-    await prisma.sessionBatch.update({
+    await db.sessionBatch.update({
       where: { id: params.batchId },
       data: fields,
     })
@@ -55,7 +56,7 @@ export async function PATCH(
 
   let renewedCount = 0
   if (renewExpiredLinks) {
-    const sessions = await prisma.clinicalSession.findMany({
+    const sessions = await db.clinicalSession.findMany({
       where: { batchId: params.batchId },
       select: {
         id: true,
@@ -72,7 +73,7 @@ export async function PATCH(
         s.questionnaires.some((q) => q.status !== 'COMPLETED'),
     )
 
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       for (const staleSession of stale) {
         await renewSessionLink(tx, staleSession.id)
       }
@@ -87,18 +88,19 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: { batchId: string } },
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const existing = await prisma.sessionBatch.findFirst({
-    where: { id: params.batchId, psychologistId: session.user.id },
+  const existing = await db.sessionBatch.findFirst({
+    where: { id: params.batchId, psychologistId: ctx.userId },
     select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // SetNull on ClinicalSession.batchId: this dissolves the grouping only. The
   // sessions, responses and notes it produced are clinical records and stay.
-  await prisma.sessionBatch.delete({ where: { id: params.batchId } })
+  await db.sessionBatch.delete({ where: { id: params.batchId } })
 
   return NextResponse.json({ ok: true })
 }

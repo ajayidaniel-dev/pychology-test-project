@@ -1,11 +1,10 @@
 import dynamic from "next/dynamic"
 import type { Metadata } from "next"
-import { getServerSession } from "next-auth"
-import { redirect, notFound } from "next/navigation"
+import { notFound } from "next/navigation"
 import { AlertTriangle, ClipboardList } from "lucide-react"
 import { formatDistanceToNowStrict } from "date-fns"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getPracticeContext, requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { isTokenExpired } from "@/lib/token"
 import { NewSessionDialog } from "@/components/sessions/new-session-dialog"
 import { SendQuestionnaireDialog } from "@/components/sessions/send-questionnaire-dialog"
@@ -73,11 +72,12 @@ export async function generateMetadata({
 }: {
   params: { id: string }
 }): Promise<Metadata> {
-  const session = await getServerSession(authOptions)
-  if (!session) return { title: "Patient" }
+  const ctx = await getPracticeContext()
+  if (!ctx) return { title: "Patient" }
+  const db = scopedDb(ctx)
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: params.id, psychologistId: session.user.id },
+  const patient = await db.patient.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId },
     select: { displayName: true, anonymousId: true },
   })
 
@@ -90,11 +90,11 @@ export default async function PatientProfilePage({
 }: {
   params: { id: string }
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: params.id, psychologistId: session.user.id },
+  const patient = await db.patient.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId },
     include: PATIENT_QUESTIONNAIRES_INCLUDE,
   })
 

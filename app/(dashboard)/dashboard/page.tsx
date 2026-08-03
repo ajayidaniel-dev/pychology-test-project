@@ -1,13 +1,11 @@
 import type { Metadata } from "next"
-import { getServerSession } from "next-auth"
-import { redirect } from "next/navigation"
 
 export const metadata: Metadata = {
   title: "Dashboard",
 }
 import Link from "next/link"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { StatusBand } from "@/components/dashboard/status-band"
 import { AlertFeed } from "@/components/dashboard/alert-feed"
@@ -24,11 +22,11 @@ import {
 import { deriveAlertCounts } from "@/lib/alerts"
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const patients = await prisma.patient.findMany({
-    where: { psychologistId: session.user.id },
+  const patients = await db.patient.findMany({
+    where: { psychologistId: ctx.userId },
     include: PATIENT_QUESTIONNAIRES_INCLUDE,
   })
 
@@ -107,7 +105,7 @@ export default async function DashboardPage() {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
-          title={`Welcome to APAS, ${session.user.name}`}
+          title={`Welcome to APAS, ${ctx.name}`}
           description="Two steps to your first tracked assessment."
         />
 
@@ -157,7 +155,7 @@ export default async function DashboardPage() {
       {/* The sticky header already names the page; repeating "Dashboard" here
           was pure duplication. Keep the greeting as the only lead-in. */}
       <PageHeader
-        title={`Welcome back, ${session.user.name}`}
+        title={`Welcome back, ${ctx.name}`}
         description="Here's what needs your attention today."
       />
 

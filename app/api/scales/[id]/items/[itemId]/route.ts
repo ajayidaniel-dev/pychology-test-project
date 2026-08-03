@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb, type ScopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const UpdateItemSchema = z.object({
@@ -10,8 +9,13 @@ const UpdateItemSchema = z.object({
   required: z.boolean().optional(),
 })
 
-async function assertOwner(scaleId: string, itemId: string, userId: string) {
-  return prisma.scaleItem.findFirst({
+async function assertOwner(
+  db: ScopedDb,
+  scaleId: string,
+  itemId: string,
+  userId: string,
+) {
+  return db.scaleItem.findFirst({
     where: {
       id: itemId,
       scaleId,
@@ -24,17 +28,18 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; itemId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const item = await assertOwner(params.id, params.itemId, session.user.id)
+  const item = await assertOwner(db, params.id, params.itemId, ctx.userId)
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json()
   const parsed = UpdateItemSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const updated = await prisma.scaleItem.update({
+  const updated = await db.scaleItem.update({
     where: { id: params.itemId },
     data: parsed.data,
     include: { options: { orderBy: { order: 'asc' } } },
@@ -46,12 +51,13 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; itemId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const item = await assertOwner(params.id, params.itemId, session.user.id)
+  const item = await assertOwner(db, params.id, params.itemId, ctx.userId)
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.scaleItem.delete({ where: { id: params.itemId } })
+  await db.scaleItem.delete({ where: { id: params.itemId } })
   return NextResponse.json({ ok: true })
 }

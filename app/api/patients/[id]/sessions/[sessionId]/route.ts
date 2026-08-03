@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { fillUrlFor } from '@/lib/request-origin'
 import { renewSessionLink } from '@/lib/session-links'
@@ -10,14 +9,15 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string; sessionId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const clinicalSession = await prisma.clinicalSession.findFirst({
+  const clinicalSession = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: session.user.id,
+      psychologistId: ctx.userId,
     },
     include: {
       patient: true,
@@ -50,14 +50,15 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; sessionId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const existing = await prisma.clinicalSession.findFirst({
+  const existing = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: session.user.id,
+      psychologistId: ctx.userId,
     },
     select: { id: true },
   })
@@ -69,13 +70,13 @@ export async function PATCH(
 
   const { renewLink, ...fields } = parsed.data
 
-  let updated = await prisma.clinicalSession.update({
+  let updated = await db.clinicalSession.update({
     where: { id: params.sessionId },
     data: fields,
   })
 
   if (renewLink) {
-    updated = await renewSessionLink(prisma, params.sessionId)
+    updated = await renewSessionLink(db, params.sessionId)
   }
 
   return NextResponse.json({ ...updated, fillUrl: fillUrlFor(req, updated.token) })
@@ -85,20 +86,21 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; sessionId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const existing = await prisma.clinicalSession.findFirst({
+  const existing = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: session.user.id,
+      psychologistId: ctx.userId,
     },
     select: { id: true },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.clinicalSession.delete({ where: { id: params.sessionId } })
+  await db.clinicalSession.delete({ where: { id: params.sessionId } })
 
   return NextResponse.json({ ok: true })
 }

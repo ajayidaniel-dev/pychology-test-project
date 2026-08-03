@@ -1,7 +1,26 @@
-import type { Prisma, PrismaClient } from '@prisma/client'
+import type { ClinicalSession, Prisma } from '@prisma/client'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
 
-type Db = PrismaClient | Prisma.TransactionClient
+/**
+ * Just the two delegates this helper touches.
+ *
+ * Structural rather than nominal on purpose: a practice-scoped client from
+ * `lib/db` is a Prisma *extension*, so it is not assignable to `PrismaClient`
+ * or `Prisma.TransactionClient` even though it behaves like one. Naming only
+ * what is used lets a plain client, a transaction client, and a scoped client
+ * all satisfy it — and a caller holding a scoped client keeps its tenant filter
+ * through this helper.
+ */
+type Db = {
+  clinicalSession: {
+    update(args: Prisma.ClinicalSessionUpdateArgs): Promise<ClinicalSession>
+  }
+  questionnaire: {
+    updateMany(
+      args: Prisma.QuestionnaireUpdateManyArgs,
+    ): Promise<Prisma.BatchPayload>
+  }
+}
 
 /**
  * Mints a fresh token for a session and revives the questionnaires the old

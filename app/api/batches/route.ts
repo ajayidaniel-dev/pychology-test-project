@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
 import { MAX_BATCH_PATIENTS } from '@/lib/batches'
@@ -28,8 +27,9 @@ const CreateBatchSchema = z
   )
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
   const body = await req.json()
   const parsed = CreateBatchSchema.safeParse(body)
@@ -44,18 +44,18 @@ export async function POST(req: NextRequest) {
   // Ownership is checked before anything is written: the ids arrive from the
   // client, so a caller could otherwise assign questionnaires to patients that
   // aren't theirs.
-  const patients = await prisma.patient.findMany({
-    where: { id: { in: patientIds }, psychologistId: session.user.id },
+  const patients = await db.patient.findMany({
+    where: { id: { in: patientIds }, psychologistId: ctx.userId },
     select: { id: true },
   })
   if (patients.length !== patientIds.length) {
     return NextResponse.json({ error: 'Unknown patient' }, { status: 404 })
   }
 
-  const scales = await prisma.scale.findMany({
+  const scales = await db.scale.findMany({
     where: {
       id: { in: scaleIds },
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
+      OR: [{ isLibrary: true }, { psychologistId: ctx.userId }],
     },
     select: { id: true, name: true },
   })
@@ -72,10 +72,11 @@ export async function POST(req: NextRequest) {
       : parsed.data.title!
   const scheduledAt = kind === 'DIRECT' ? new Date() : parsed.data.scheduledAt!
 
-  const batch = await prisma.$transaction(async (tx) => {
+  const batch = await db.$transaction(async (tx) => {
     const created = await tx.sessionBatch.create({
       data: {
-        psychologistId: session.user.id,
+        practiceId: ctx.practiceId,
+        psychologistId: ctx.userId,
         kind,
         title,
         reason: reason || null,
@@ -91,7 +92,8 @@ export async function POST(req: NextRequest) {
         data: {
           batchId: created.id,
           patientId,
-          psychologistId: session.user.id,
+          practiceId: ctx.practiceId,
+          psychologistId: ctx.userId,
           kind,
           title,
           reason: reason || null,
@@ -101,6 +103,7 @@ export async function POST(req: NextRequest) {
           tokenExpiresAt: tokenExpiresAt(),
           questionnaires: {
             create: scaleIds.map((scaleId, index) => ({
+              practiceId: ctx.practiceId,
               scaleId,
               order: index + 1,
             })),
@@ -116,11 +119,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const batches = await prisma.sessionBatch.findMany({
-    where: { psychologistId: session.user.id },
+  const batches = await db.sessionBatch.findMany({
+    where: { psychologistId: ctx.userId },
     include: {
       sessions: {
         select: {

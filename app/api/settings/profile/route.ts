@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { z } from "zod"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getUserContext, unauthorized } from "@/lib/session-context"
+import { unscopedDb as prisma } from "@/lib/db"
 
 const ProfileSchema = z.object({
   name: z
@@ -13,13 +12,11 @@ const ProfileSchema = z.object({
 })
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getUserContext()
+  if (!ctx) return unauthorized()
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: ctx.userId },
     select: { name: true, email: true },
   })
 
@@ -31,10 +28,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getUserContext()
+  if (!ctx) return unauthorized()
 
   const body = await req.json()
   const parsed = ProfileSchema.safeParse(body)
@@ -46,7 +41,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const user = await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: ctx.userId },
     data: { name: parsed.data.name },
     select: { name: true, email: true },
   })

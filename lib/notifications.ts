@@ -1,4 +1,5 @@
 import { NotificationType, type Notification } from "@prisma/client"
+import type { PrismaLike } from "@/lib/db"
 import prisma from "@/lib/prisma"
 import { isNotificationEnabled } from "@/lib/notification-preferences"
 import { computeAlerts } from "@/lib/alert-rules"
@@ -20,6 +21,8 @@ const TYPE_PRIORITY: Record<NotificationType, number> = {
 
 export interface CreateNotificationInput {
   userId: string
+  /** Null for account-level notifications (LOGIN), which belong to no practice. */
+  practiceId?: string | null
   type: NotificationType
   title: string
   body: string
@@ -32,6 +35,7 @@ export interface CreateNotificationInput {
 
 export interface QuestionnaireSubmitContext {
   questionnaireId: string
+  practiceId: string
   sessionId: string
   patientId: string
   psychologistId: string
@@ -55,6 +59,7 @@ export function buildQuestionnaireSubmitNotifications(
   const href = `/patients/${ctx.patientId}/sessions/${ctx.sessionId}/questionnaires/${ctx.questionnaireId}`
   const base = {
     userId: ctx.psychologistId,
+    practiceId: ctx.practiceId,
     patientId: ctx.patientId,
     sessionId: ctx.sessionId,
     questionnaireId: ctx.questionnaireId,
@@ -191,6 +196,7 @@ export async function createNotification(
     },
     create: {
       userId: data.userId,
+      practiceId: data.practiceId ?? null,
       type: data.type,
       title: data.title,
       body: data.body,
@@ -238,12 +244,13 @@ export async function resolveUnreviewedForQuestionnaire(
 }
 
 export async function reconcileOperationalNotifications(
+  db: PrismaLike,
   userId: string,
 ): Promise<void> {
   const now = Date.now()
   // The fill token is session-level now, so link expiry is judged per session.
   // Only sessions still waiting on at least one questionnaire are at stake.
-  const openSessions = await prisma.clinicalSession.findMany({
+  const openSessions = await db.clinicalSession.findMany({
     where: {
       psychologistId: userId,
       status: { not: "CANCELLED" },
@@ -273,6 +280,7 @@ export async function reconcileOperationalNotifications(
     if (isTokenExpired(clinicalSession.tokenExpiresAt)) {
       await createNotification({
         userId,
+        practiceId: clinicalSession.practiceId,
         type: NotificationType.LINK_EXPIRED,
         dedupeKey: `session:${clinicalSession.id}:link-expired`,
         title: `${linkNoun} link expired`,
@@ -282,7 +290,7 @@ export async function reconcileOperationalNotifications(
         sessionId: clinicalSession.id,
       })
 
-      await prisma.questionnaire.updateMany({
+      await db.questionnaire.updateMany({
         where: { sessionId: clinicalSession.id, status: "PENDING" },
         data: { status: "EXPIRED" },
       })
@@ -293,6 +301,7 @@ export async function reconcileOperationalNotifications(
     if (msUntilExpiry <= LINK_EXPIRING_WINDOW_MS) {
       await createNotification({
         userId,
+        practiceId: clinicalSession.practiceId,
         type: NotificationType.LINK_EXPIRING_SOON,
         dedupeKey: `session:${clinicalSession.id}:link-expiring`,
         title: `${linkNoun} link expiring soon`,
@@ -306,10 +315,11 @@ export async function reconcileOperationalNotifications(
 }
 
 export async function listNotifications(
+  db: PrismaLike,
   userId: string,
   limit = 30,
 ): Promise<{ items: Notification[]; unreadCount: number }> {
-  const items = await prisma.notification.findMany({
+  const items = await db.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: limit * 2,
@@ -320,7 +330,7 @@ export async function listNotifications(
     ...item,
     href: resolveNotificationHref(item),
   }))
-  const unreadCount = await prisma.notification.count({
+  const unreadCount = await db.notification.count({
     where: { userId, readAt: null },
   })
 
@@ -328,18 +338,22 @@ export async function listNotifications(
 }
 
 export async function markNotificationRead(
+  db: PrismaLike,
   userId: string,
   id: string,
 ): Promise<boolean> {
-  const result = await prisma.notification.updateMany({
+  const result = await db.notification.updateMany({
     where: { id, userId, readAt: null },
     data: { readAt: new Date() },
   })
   return result.count > 0
 }
 
-export async function markAllNotificationsRead(userId: string): Promise<void> {
-  await prisma.notification.updateMany({
+export async function markAllNotificationsRead(
+  db: PrismaLike,
+  userId: string,
+): Promise<void> {
+  await db.notification.updateMany({
     where: { userId, readAt: null },
     data: { readAt: new Date() },
   })

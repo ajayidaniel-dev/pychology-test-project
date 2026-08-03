@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import prisma from "@/lib/prisma"
+import { unscopedDb as prisma } from "@/lib/db"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { createPasswordResetToken, RESET_TOKEN_TTL_MS } from "@/lib/password-reset"
 import { sendEmail } from "@/lib/mailer"

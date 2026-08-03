@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { z } from "zod"
-import { authOptions } from "@/lib/auth"
+import { getPracticeContext, practiceContextFailure } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -15,22 +15,20 @@ const PatchSchema = z.discriminatedUnion("action", [
 ])
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  await reconcileOperationalNotifications(session.user.id)
-  const { items, unreadCount } = await listNotifications(session.user.id)
+  await reconcileOperationalNotifications(db, ctx.userId)
+  const { items, unreadCount } = await listNotifications(db, ctx.userId)
 
   return NextResponse.json({ items, unreadCount })
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
@@ -39,11 +37,11 @@ export async function PATCH(req: NextRequest) {
   }
 
   if (parsed.data.action === "read_all") {
-    await markAllNotificationsRead(session.user.id)
+    await markAllNotificationsRead(db, ctx.userId)
     return NextResponse.json({ ok: true })
   }
 
-  const updated = await markNotificationRead(session.user.id, parsed.data.id)
+  const updated = await markNotificationRead(db, ctx.userId, parsed.data.id)
   if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }

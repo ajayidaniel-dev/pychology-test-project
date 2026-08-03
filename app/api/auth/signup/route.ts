@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import prisma from "@/lib/prisma"
+import { unscopedDb as prisma } from "@/lib/db"
 import { hashPassword } from "@/lib/password"
 import { signupSchema } from "@/lib/validation/signup"
 

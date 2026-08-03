@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
-import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { requireUser } from "@/lib/session-context"
+import { unscopedDb as prisma } from "@/lib/db"
 import { PageHeader } from "@/components/layout/page-header"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 
@@ -11,11 +10,10 @@ export const metadata: Metadata = {
 }
 
 export default async function SettingsPage() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) redirect("/auth/signin")
+  const ctx = await requireUser()
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: ctx.userId },
     select: { name: true, email: true },
   })
 

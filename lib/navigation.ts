@@ -1,4 +1,4 @@
-import prisma from "@/lib/prisma"
+import type { PrismaLike } from "@/lib/db"
 import { getAlertCounts } from "@/lib/alerts"
 
 export interface NavCounts {
@@ -19,15 +19,18 @@ export interface NavCounts {
  *
  * `pendingQuestionnaires` matches the dashboard StatusBand's own definition.
  */
-export async function getNavCounts(psychologistId: string): Promise<NavCounts> {
+export async function getNavCounts(
+  db: PrismaLike,
+  psychologistId: string,
+): Promise<NavCounts> {
   const [pendingQuestionnaires, alerts] = await Promise.all([
-    prisma.questionnaire.count({
+    db.questionnaire.count({
       where: {
         status: "PENDING",
         session: { psychologistId },
       },
     }),
-    getAlertCounts(psychologistId),
+    getAlertCounts(db, psychologistId),
   ])
 
   return { pendingQuestionnaires, criticalAlerts: alerts.critical }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { computeAlerts } from '@/lib/alert-rules'
 import { scaleNameToEnum } from '@/lib/patient-summary'
 import { buildItemLines, buildHistoryBlock, callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
@@ -104,17 +103,18 @@ Produce the structured clinical summary.`
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
   const parsed = BodySchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   const { patientId, questionnaireId, regenerate } = parsed.data
 
-  const questionnaire = await prisma.questionnaire.findFirst({
+  const questionnaire = await db.questionnaire.findFirst({
     where: {
       id: questionnaireId,
-      session: { patientId, psychologistId: session.user.id },
+      session: { patientId, psychologistId: ctx.userId },
     },
     include: {
       response: true,
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set in .env.local' }, { status: 500 })
   }
 
-  const rate = checkRateLimit(`narrative:${session.user.id}`, 5, 60_000)
+  const rate = checkRateLimit(`narrative:${ctx.userId}`, 5, 60_000)
   if (!rate.allowed) {
     return NextResponse.json(
       { error: 'Too many summary requests. Wait a moment and try again.' },
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
   )
   const itemLines = buildItemLines(itemScores, itemLabels)
 
-  const prior = await prisma.questionnaire.findMany({
+  const prior = await db.questionnaire.findMany({
     where: {
       session: { patientId },
       scaleId: questionnaire.scaleId,
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
   }
 
   const generatedAt = new Date()
-  await prisma.questionnaireResponse.update({
+  await db.questionnaireResponse.update({
     where: { questionnaireId },
     data: { narrative, narrativeGeneratedAt: generatedAt },
   })

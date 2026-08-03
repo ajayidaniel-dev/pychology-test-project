@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const AddThresholdSchema = z.object({
@@ -11,11 +10,12 @@ const AddThresholdSchema = z.object({
 })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const scale = await prisma.scale.findFirst({
-    where: { id: params.id, psychologistId: session.user.id, isLibrary: false },
+  const scale = await db.scale.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId, isLibrary: false },
   })
   if (!scale) return NextResponse.json({ error: 'Not found or not editable' }, { status: 404 })
 
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = AddThresholdSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const threshold = await prisma.severityThreshold.create({
+  const threshold = await db.severityThreshold.create({
     data: { ...parsed.data, scaleId: params.id },
   })
 

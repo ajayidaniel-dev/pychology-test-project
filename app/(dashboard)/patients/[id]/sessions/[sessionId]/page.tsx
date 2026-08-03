@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
-import { getServerSession } from "next-auth"
-import { redirect, notFound } from "next/navigation"
+import { notFound } from "next/navigation"
 import { Link2Off } from "lucide-react"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getPracticeContext, requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { isTokenExpired } from "@/lib/token"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
@@ -20,14 +19,15 @@ export async function generateMetadata({
 }: {
   params: { id: string; sessionId: string }
 }): Promise<Metadata> {
-  const session = await getServerSession(authOptions)
-  if (!session) return { title: "Session" }
+  const ctx = await getPracticeContext()
+  if (!ctx) return { title: "Session" }
+  const db = scopedDb(ctx)
 
-  const clinicalSession = await prisma.clinicalSession.findFirst({
+  const clinicalSession = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: session.user.id,
+      psychologistId: ctx.userId,
     },
     select: { title: true },
   })
@@ -40,14 +40,14 @@ export default async function SessionDetailPage({
 }: {
   params: { id: string; sessionId: string }
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const clinicalSession = await prisma.clinicalSession.findFirst({
+  const clinicalSession = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: session.user.id,
+      psychologistId: ctx.userId,
     },
     include: {
       patient: { select: { anonymousId: true } },

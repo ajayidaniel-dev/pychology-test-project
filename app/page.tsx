@@ -1,8 +1,7 @@
 // app/page.tsx
-import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 
-import { authOptions } from "@/lib/auth"
+import { getUserContext } from "@/lib/session-context"
 import { LandingOverwatch } from "@/components/landing/landing-overwatch"
 
 export const metadata = {
@@ -11,8 +10,8 @@ export const metadata = {
 }
 
 export default async function RootPage() {
-  const session = await getServerSession(authOptions)
-  if (session) redirect("/dashboard")
+  const ctx = await getUserContext()
+  if (ctx) redirect("/dashboard")
 
   return <LandingOverwatch />
 }

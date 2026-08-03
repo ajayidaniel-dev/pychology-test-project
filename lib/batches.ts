@@ -1,4 +1,4 @@
-import prisma from '@/lib/prisma'
+import type { PrismaLike } from '@/lib/db'
 import { isTokenExpired } from '@/lib/token'
 
 /** Guardrail on one transaction's size, and on how many links a clinician can sanely hand out at once. */
@@ -53,8 +53,12 @@ export function batchProgress(sessions: SessionLike[]): BatchProgress {
 }
 
 /** Loads a batch, scoped to its owner. Returns null when it isn't theirs. */
-export async function findOwnedBatch(batchId: string, psychologistId: string) {
-  return prisma.sessionBatch.findFirst({
+export async function findOwnedBatch(
+  db: PrismaLike,
+  batchId: string,
+  psychologistId: string,
+) {
+  return db.sessionBatch.findFirst({
     where: { id: batchId, psychologistId },
     include: BATCH_SESSIONS_INCLUDE,
   })

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb, type ScopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const UpdateThresholdSchema = z.object({
@@ -10,8 +9,13 @@ const UpdateThresholdSchema = z.object({
   maxScore: z.number().optional(),
 })
 
-async function assertOwner(scaleId: string, thresholdId: string, userId: string) {
-  return prisma.severityThreshold.findFirst({
+async function assertOwner(
+  db: ScopedDb,
+  scaleId: string,
+  thresholdId: string,
+  userId: string,
+) {
+  return db.severityThreshold.findFirst({
     where: {
       id: thresholdId,
       scaleId,
@@ -24,17 +28,18 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string; thresholdId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const threshold = await assertOwner(params.id, params.thresholdId, session.user.id)
+  const threshold = await assertOwner(db, params.id, params.thresholdId, ctx.userId)
   if (!threshold) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await req.json()
   const parsed = UpdateThresholdSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const updated = await prisma.severityThreshold.update({
+  const updated = await db.severityThreshold.update({
     where: { id: params.thresholdId },
     data: parsed.data,
   })
@@ -45,12 +50,13 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string; thresholdId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const threshold = await assertOwner(params.id, params.thresholdId, session.user.id)
+  const threshold = await assertOwner(db, params.id, params.thresholdId, ctx.userId)
   if (!threshold) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await prisma.severityThreshold.delete({ where: { id: params.thresholdId } })
+  await db.severityThreshold.delete({ where: { id: params.thresholdId } })
   return NextResponse.json({ ok: true })
 }

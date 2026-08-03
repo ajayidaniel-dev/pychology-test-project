@@ -1,10 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { getServerSession } from "next-auth"
-import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { PageHeader } from "@/components/layout/page-header"
 import { NewBatchForm } from "@/components/batches/new-batch-form"
@@ -23,20 +21,20 @@ export default async function NewBatchPage({
 }: {
   searchParams: { kind?: string }
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
   // Same shaping as the patients list, so severity and last-assessed match
   // what the clinician sees everywhere else.
   const [patients, scales] = await Promise.all([
-    prisma.patient.findMany({
-      where: { psychologistId: session.user.id },
+    db.patient.findMany({
+      where: { psychologistId: ctx.userId },
       include: PATIENT_QUESTIONNAIRES_INCLUDE,
       orderBy: { anonymousId: "asc" },
     }),
-    prisma.scale.findMany({
+    db.scale.findMany({
       where: {
-        OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
+        OR: [{ isLibrary: true }, { psychologistId: ctx.userId }],
       },
       select: { id: true, name: true, description: true, isLibrary: true },
       orderBy: { name: "asc" },

@@ -15,7 +15,11 @@
     "postinstall": "prisma generate",
     "test": "jest",
     "test:watch": "jest --watch",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:tenancy": "node scripts/check-tenancy-seam.mjs",
+    "check:indexes": "node scripts/check-index-usage.mjs",
+    "verify:rls": "node scripts/verify-rls.mjs",
+    "db:export": "node scripts/export-database.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",

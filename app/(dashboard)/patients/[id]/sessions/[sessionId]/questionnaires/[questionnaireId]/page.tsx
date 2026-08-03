@@ -1,10 +1,9 @@
 import dynamic from "next/dynamic"
 import type { Metadata } from "next"
-import { getServerSession } from "next-auth"
-import { redirect, notFound } from "next/navigation"
+import { notFound } from "next/navigation"
 import { AlertTriangle } from "lucide-react"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { QuestionnaireDetailHeader } from "@/components/sessions/questionnaire-detail-header"
@@ -52,14 +51,14 @@ export default async function QuestionnaireDetailPage({
 }: {
   params: { id: string; sessionId: string; questionnaireId: string }
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const questionnaire = await prisma.questionnaire.findFirst({
+  const questionnaire = await db.questionnaire.findFirst({
     where: {
       id: params.questionnaireId,
       sessionId: params.sessionId,
-      session: { patientId: params.id, psychologistId: session.user.id },
+      session: { patientId: params.id, psychologistId: ctx.userId },
     },
     include: {
       response: true,

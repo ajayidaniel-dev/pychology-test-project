@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { unscopedDb as prisma } from '@/lib/db'
 import { isTokenExpired } from '@/lib/token'
 import { Prisma } from '@prisma/client'
 import { computeNumericScore, lookupSeverity, validateItemScores } from '@/lib/scale-scoring'
@@ -126,6 +126,9 @@ export async function POST(
   await createQuestionnaireSubmitNotifications({
     questionnaireId: questionnaire.id,
     sessionId: clinicalSession.id,
+    // The patient fill flow is token-authenticated with no practice context of
+    // its own — the practice comes from the session the token unlocked.
+    practiceId: clinicalSession.practiceId,
     patientId: clinicalSession.patientId,
     psychologistId: clinicalSession.psychologistId,
     anonymousId: clinicalSession.patient.anonymousId,

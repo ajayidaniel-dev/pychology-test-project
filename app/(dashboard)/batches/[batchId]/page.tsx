@@ -1,10 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { getServerSession } from "next-auth"
-import { redirect, notFound } from "next/navigation"
+import { notFound } from "next/navigation"
 import { ArrowLeft, Link2Off } from "lucide-react"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getPracticeContext, requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { isTokenExpired } from "@/lib/token"
 import { batchProgress, findOwnedBatch } from "@/lib/batches"
 import { Badge } from "@/components/ui/badge"
@@ -34,11 +33,12 @@ export async function generateMetadata({
 }: {
   params: { batchId: string }
 }): Promise<Metadata> {
-  const session = await getServerSession(authOptions)
-  if (!session) return { title: "Batch" }
+  const ctx = await getPracticeContext()
+  if (!ctx) return { title: "Batch" }
+  const db = scopedDb(ctx)
 
-  const batch = await prisma.sessionBatch.findFirst({
-    where: { id: params.batchId, psychologistId: session.user.id },
+  const batch = await db.sessionBatch.findFirst({
+    where: { id: params.batchId, psychologistId: ctx.userId },
     select: { title: true },
   })
 
@@ -50,10 +50,10 @@ export default async function BatchDetailPage({
 }: {
   params: { batchId: string }
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const batch = await findOwnedBatch(params.batchId, session.user.id)
+  const batch = await findOwnedBatch(db, params.batchId, ctx.userId)
   if (!batch) notFound()
 
   const progress = batchProgress(batch.sessions)

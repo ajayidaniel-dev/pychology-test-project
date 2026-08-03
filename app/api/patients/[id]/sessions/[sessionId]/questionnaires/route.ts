@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const AddQuestionnaireSchema = z.object({
@@ -12,14 +11,15 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { id: string; sessionId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const clinicalSession = await prisma.clinicalSession.findFirst({
+  const clinicalSession = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: session.user.id,
+      psychologistId: ctx.userId,
     },
     select: { id: true, _count: { select: { questionnaires: true } } },
   })
@@ -29,18 +29,19 @@ export async function POST(
   const parsed = AddQuestionnaireSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const scaleRecord = await prisma.scale.findFirst({
+  const scaleRecord = await db.scale.findFirst({
     where: {
       id: parsed.data.scaleId,
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
+      OR: [{ isLibrary: true }, { psychologistId: ctx.userId }],
     },
     select: { id: true },
   })
   if (!scaleRecord) return NextResponse.json({ error: 'Scale not found' }, { status: 400 })
 
-  const questionnaire = await prisma.questionnaire.create({
+  const questionnaire = await db.questionnaire.create({
     data: {
       sessionId: params.sessionId,
+      practiceId: ctx.practiceId,
       scaleId: parsed.data.scaleId,
       order: clinicalSession._count.questionnaires + 1,
     },
@@ -54,13 +55,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string; sessionId: string } }
 ) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const questionnaires = await prisma.questionnaire.findMany({
+  const questionnaires = await db.questionnaire.findMany({
     where: {
       sessionId: params.sessionId,
-      session: { patientId: params.id, psychologistId: session.user.id },
+      session: { patientId: params.id, psychologistId: ctx.userId },
     },
     include: { response: true, scale: { select: { id: true, name: true } } },
     orderBy: { order: 'asc' },

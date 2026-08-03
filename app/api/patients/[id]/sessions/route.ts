@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
 import { fillUrlFor } from '@/lib/request-origin'
@@ -14,11 +13,12 @@ const CreateSessionSchema = z.object({
 })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: params.id, psychologistId: session.user.id },
+  const patient = await db.patient.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -26,10 +26,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = CreateSessionSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const clinicalSession = await prisma.clinicalSession.create({
+  const clinicalSession = await db.clinicalSession.create({
     data: {
       patientId: params.id,
-      psychologistId: session.user.id,
+      practiceId: ctx.practiceId,
+      psychologistId: ctx.userId,
       title: parsed.data.title,
       reason: parsed.data.reason || null,
       scheduledAt: parsed.data.scheduledAt,
@@ -46,8 +47,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
   // Appointments and direct sends share a table but are separate lists in the
   // UI, so callers say which they want. No `kind` means everything.
@@ -55,8 +57,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const kind =
     kindParam === 'APPOINTMENT' || kindParam === 'DIRECT' ? kindParam : undefined
 
-  const sessions = await prisma.clinicalSession.findMany({
-    where: { patientId: params.id, psychologistId: session.user.id, kind },
+  const sessions = await db.clinicalSession.findMany({
+    where: { patientId: params.id, psychologistId: ctx.userId, kind },
     include: {
       questionnaires: {
         include: { response: true, scale: { select: { id: true, name: true } } },

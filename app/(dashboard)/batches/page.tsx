@@ -1,10 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { getServerSession } from "next-auth"
-import { redirect } from "next/navigation"
 import { Layers, Plus, Send } from "lucide-react"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { PageHeader } from "@/components/layout/page-header"
@@ -18,11 +16,11 @@ export const metadata: Metadata = {
 }
 
 export default async function BatchesPage() {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const batches = await prisma.sessionBatch.findMany({
-    where: { psychologistId: session.user.id },
+  const batches = await db.sessionBatch.findMany({
+    where: { psychologistId: ctx.userId },
     include: {
       sessions: {
         select: {

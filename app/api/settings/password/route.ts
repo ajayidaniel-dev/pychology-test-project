@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
 import { z } from "zod"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { getUserContext, unauthorized } from "@/lib/session-context"
+import { unscopedDb as prisma } from "@/lib/db"
 import { hashPassword, verifyPassword } from "@/lib/password"
 import { signupPasswordSchema } from "@/lib/validation/signup"
 
@@ -18,10 +17,8 @@ const PasswordSchema = z
   })
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getUserContext()
+  if (!ctx) return unauthorized()
 
   const body = await req.json()
   const parsed = PasswordSchema.safeParse(body)
@@ -33,7 +30,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: ctx.userId },
     select: { passwordHash: true },
   })
 
@@ -72,7 +69,7 @@ export async function PATCH(req: NextRequest) {
 
   const passwordHash = await hashPassword(parsed.data.newPassword)
   await prisma.user.update({
-    where: { id: session.user.id },
+    where: { id: ctx.userId },
     data: { passwordHash },
   })
 

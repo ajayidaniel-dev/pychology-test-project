@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
-import { getServerSession } from "next-auth"
-import { redirect, notFound } from "next/navigation"
-import { authOptions } from "@/lib/auth"
-import prisma from "@/lib/prisma"
+import { notFound } from "next/navigation"
+import { getPracticeContext, requirePracticeContext } from "@/lib/session-context"
+import { scopedDb } from "@/lib/db"
 import { ScaleDetailHeader } from "@/components/scales/scale-detail-header"
 import { ScaleItemsSection } from "@/components/scales/scale-items-section"
 import { ScaleThresholdsSection } from "@/components/scales/scale-thresholds-section"
@@ -13,7 +12,13 @@ export async function generateMetadata({
 }: {
   params: { id: string }
 }): Promise<Metadata> {
-  const scale = await prisma.scale.findUnique({
+  // This previously queried unguarded, so a scale's name was readable by id
+  // without a session. Metadata now resolves through the same practice context
+  // as the page, and falls back to a generic title otherwise.
+  const ctx = await getPracticeContext()
+  if (!ctx) return { title: "Scale" }
+
+  const scale = await scopedDb(ctx).scale.findUnique({
     where: { id: params.id },
     select: { name: true },
   })
@@ -26,13 +31,13 @@ export default async function ScaleDetailPage({
 }: {
   params: { id: string }
 }) {
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/auth/signin")
+  const ctx = await requirePracticeContext()
+  const db = scopedDb(ctx)
 
-  const scale = await prisma.scale.findFirst({
+  const scale = await db.scale.findFirst({
     where: {
       id: params.id,
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
+      OR: [{ isLibrary: true }, { psychologistId: ctx.userId }],
     },
     include: {
       items: {

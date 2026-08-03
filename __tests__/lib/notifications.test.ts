@@ -34,6 +34,7 @@ const mockPrisma = prisma as jest.Mocked<typeof prisma>
 describe("buildQuestionnaireSubmitNotifications", () => {
   const baseCtx = {
     questionnaireId: "q-1",
+    practiceId: "practice-1",
     sessionId: "sess-1",
     patientId: "pat-1",
     psychologistId: "user-1",
@@ -190,7 +191,7 @@ describe("reconcileOperationalNotifications", () => {
       "@/lib/notifications"
     )
 
-    await reconcileOperationalNotifications("user-1")
+    await reconcileOperationalNotifications(mockPrisma, "user-1")
 
     expect(mockPrisma.notification.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
