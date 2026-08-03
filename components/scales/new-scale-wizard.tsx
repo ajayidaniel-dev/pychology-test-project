@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -22,6 +24,8 @@ import { cn } from "@/lib/utils"
 const STEPS = ["Basic Info", "Questions", "Score Thresholds"]
 
 export function NewScaleWizard() {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -163,7 +167,7 @@ export function NewScaleWizard() {
       }
 
       toast.success("Scale created")
-      router.push("/scales")
+      router.push(practiceHref("/scales"))
     } catch (e: unknown) {
       if (scale) {
         await fetch(`/api/scales/${scale.id}`, { method: "DELETE" }).catch(
@@ -255,7 +259,7 @@ export function NewScaleWizard() {
             type="button"
             variant="outline"
             onClick={() =>
-              step === 0 ? router.push("/scales") : setStep((s) => s - 1)
+              step === 0 ? router.push(practiceHref("/scales")) : setStep((s) => s - 1)
             }
             className="gap-1"
           >

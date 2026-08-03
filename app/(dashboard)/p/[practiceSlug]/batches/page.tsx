@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { practiceHref } from "@/lib/practice-path-server"
 import Link from "next/link"
 import { Layers, Plus, Send } from "lucide-react"
 import { requirePracticeContext } from "@/lib/session-context"
@@ -43,13 +44,13 @@ export default async function BatchesPage() {
   const newBatchButton = (
     <div className="flex flex-wrap items-center gap-2">
       <Button asChild variant="outline" size="sm" className="min-h-11 sm:min-h-0">
-        <Link href="/batches/new?kind=direct">
+        <Link href={practiceHref("/batches/new?kind=direct")}>
           <Send className="size-4" />
           Send questionnaires
         </Link>
       </Button>
       <Button asChild size="sm" className="min-h-11 sm:min-h-0">
-        <Link href="/batches/new">
+        <Link href={practiceHref("/batches/new")}>
           <Plus className="size-4" />
           New batch
         </Link>
@@ -74,7 +75,7 @@ export default async function BatchesPage() {
           description="Send the same questionnaires to several patients at once — as booked appointments, or as links on their own. Each patient still gets their own private link."
           action={
             <Button asChild>
-              <Link href="/batches/new">Create first batch</Link>
+              <Link href={practiceHref("/batches/new")}>Create first batch</Link>
             </Button>
           }
         />

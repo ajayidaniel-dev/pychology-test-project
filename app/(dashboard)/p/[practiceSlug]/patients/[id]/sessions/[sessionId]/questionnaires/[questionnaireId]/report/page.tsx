@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { practiceHref } from "@/lib/practice-path-server"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
@@ -74,7 +75,7 @@ export default async function QuestionnaireReportPage({
       <div className="print-hidden flex items-center justify-between gap-2">
         <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
           <Link
-            href={`/patients/${params.id}/sessions/${params.sessionId}/questionnaires/${params.questionnaireId}`}
+            href={practiceHref(`/patients/${params.id}/sessions/${params.sessionId}/questionnaires/${params.questionnaireId}`)}
           >
             <ArrowLeft className="size-4" />
             Back to results
@@ -160,7 +161,7 @@ export default async function QuestionnaireReportPage({
             No AI summary has been generated for this questionnaire yet. Open
             the{" "}
             <Link
-              href={`/patients/${params.id}/sessions/${params.sessionId}/questionnaires/${params.questionnaireId}`}
+              href={practiceHref(`/patients/${params.id}/sessions/${params.sessionId}/questionnaires/${params.questionnaireId}`)}
               className="underline"
             >
               results page

@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import {
   createContext,
   useCallback,
@@ -143,12 +145,17 @@ function CommandPalette() {
       })
   }, [open])
 
+  const practiceHref = usePracticeHref()
+
+  // Every palette destination funnels through here, so the practice prefix is
+  // applied once rather than at each of the nine call sites. Account paths
+  // (/settings) pass through untouched.
   const go = useCallback(
     (href: string) => {
       setOpen(false)
-      router.push(href)
+      router.push(practiceHref(href))
     },
-    [router, setOpen],
+    [router, setOpen, practiceHref],
   )
 
   return (

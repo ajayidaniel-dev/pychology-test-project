@@ -75,7 +75,7 @@ export function SignUpForm() {
 
       toast.success("Account created")
       setRedirecting(true)
-      router.push("/dashboard")
+      router.push("/practice-redirect")
     } catch {
       // The original had no catch: a dropped connection left the button spinning
       // with no explanation.

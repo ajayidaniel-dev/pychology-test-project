@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { practiceHref } from "@/lib/practice-path-server"
 import Link from "next/link"
 
 export const metadata: Metadata = {
@@ -36,7 +37,7 @@ export default async function ScalesPage() {
         hideTitleOnMobile
         actions={
           <Button asChild>
-            <Link href="/scales/new">
+            <Link href={practiceHref("/scales/new")}>
               <Plus className="size-4" />
               New Scale
             </Link>

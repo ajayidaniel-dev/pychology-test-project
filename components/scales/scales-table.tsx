@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { BookOpen, ChevronRight, User } from "lucide-react"
@@ -78,6 +80,8 @@ export function ScalesTable({
   scales,
   searchPlaceholder = "Search scales…",
 }: ScalesTableProps) {
+  const practiceHref = usePracticeHref()
+
   const hasDescriptions = scales.some((s) => s.description)
   const visibleColumns = columns.filter((column) => {
     if ("accessorKey" in column && column.accessorKey === "description") return hasDescriptions
@@ -88,7 +92,7 @@ export function ScalesTable({
     <TanStackDataTable
       columns={visibleColumns}
       data={scales}
-      getRowHref={(row) => `/scales/${row.id}`}
+      getRowHref={(row) => practiceHref(`/scales/${row.id}`)}
       enableSearch
       searchPlaceholder={searchPlaceholder}
       globalFilterFn={(row, filter) => {
@@ -101,7 +105,7 @@ export function ScalesTable({
       mobileListClassName="divide-y"
       renderMobileRow={(scale) => (
         <Link
-          href={`/scales/${scale.id}`}
+          href={practiceHref(`/scales/${scale.id}`)}
           className="block min-h-22 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-3">

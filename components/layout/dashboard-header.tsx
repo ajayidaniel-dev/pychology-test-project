@@ -1,7 +1,10 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { stripPracticePrefix } from "@/lib/practice-path"
 import { ChevronLeft } from "lucide-react"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
@@ -23,8 +26,11 @@ interface Location {
 }
 
 function resolveLocation(pathname: string): Location {
+  // Matched against the practice-relative path: the pathname now carries a
+  // /p/<slug> prefix that no section constant knows about.
+  const relative = stripPracticePrefix(pathname)
   const match = SECTIONS.find(
-    (s) => pathname === s.prefix || pathname.startsWith(`${s.prefix}/`),
+    (s) => relative === s.prefix || relative.startsWith(`${s.prefix}/`),
   )
   if (!match) {
     return { section: "APAS", sectionHref: "/dashboard", isDetail: false }
@@ -32,7 +38,7 @@ function resolveLocation(pathname: string): Location {
   return {
     section: match.label,
     sectionHref: match.prefix,
-    isDetail: pathname !== match.prefix,
+    isDetail: relative !== match.prefix,
   }
 }
 
@@ -46,6 +52,7 @@ function resolveLocation(pathname: string): Location {
  */
 export function DashboardHeader() {
   const pathname = usePathname()
+  const practiceHref = usePracticeHref()
   const { section, sectionHref, isDetail } = resolveLocation(pathname)
 
   return (
@@ -59,7 +66,7 @@ export function DashboardHeader() {
           // PageHeader directly below, so a second crumb here could only be a
           // placeholder — and a breadcrumb reading "Detail" is worse than none.
           <Link
-            href={sectionHref}
+            href={practiceHref(sectionHref)}
             className="-ml-1.5 inline-flex items-center gap-0.5 rounded-md py-1 pr-2 pl-1 text-sm font-medium text-muted-foreground transition-colors duration-150 ease-out-quart hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             <ChevronLeft className="size-4 shrink-0" aria-hidden />

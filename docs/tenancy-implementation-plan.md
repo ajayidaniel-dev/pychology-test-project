@@ -1,6 +1,6 @@
 # Tenancy Implementation Plan
 
-**Status:** phases 0–4 done · phase 2 dropped · RLS shipped dormant · drafted and last updated 2026-08-03
+**Status:** phases 0–5 done · phase 2 dropped · RLS shipped dormant · drafted and last updated 2026-08-03
 **Design:** [multi-tenancy-design.md](./multi-tenancy-design.md) · [information-architecture.md](./information-architecture.md)
 
 ---
@@ -285,22 +285,106 @@ Not done yet. When the app and database are colocated:
 
 ---
 
-## Phase 5 — Practice context becomes real
+## Phase 5 — Practice context becomes real ✅ done 2026-08-03
 
-**First user-visible phase.**
+**The first phase a user can see.**
 
-1. Active practice stored in the session; practice switcher at the top of the
-   sidebar (not the account menu — see IA §4).
-2. **Scope global search and the command palette.** Highest-risk surface; must
-   land with this phase, not after.
-3. Practice-scoped notifications, with the suicidal-ideation alert exception
-   (surfaces regardless of active context, labelled with its practice).
-4. Slug in the URL — `/p/[slug]/…` — if that decision is confirmed. Cheaper now
-   than after more links exist.
+### Slug in the path
 
-**Verification:** switch practices, confirm every list, search result and badge
-changes. Manual QA matters here in a way it did not for 0–4.
-**Risk:** medium — the first phase where a mistake is visible to users.
+Decided and shipped: every tenant-owned URL is `/p/<slug>/…`. The four route
+trees moved under `app/(dashboard)/p/[practiceSlug]/`; `/settings` stayed put,
+because it belongs to the human rather than any practice.
+
+The slug is authoritative. Middleware lifts it out of the pathname into a
+request header (`x-practice-slug`), stripping any inbound value first so a
+client cannot name a practice the URL never mentioned. `getPracticeContext()`
+reads it there — server components cannot see the pathname, and threading a
+param through every page and helper would mean every data access having to be
+told which practice it is in.
+
+Resolution order: **URL slug → last-used cookie → earliest membership.** The
+cookie is a preference, not a grant; access is always re-derived from
+membership, so a tampered value selects nothing the user could not already
+reach.
+
+**The security-critical branch:** when the URL names a practice the user has no
+active membership in, resolution returns null rather than falling back. Falling
+back would render one practice's records under another practice's URL. Covered
+by a test that asserts only one lookup happens — no cookie or first-membership
+fallback is attempted.
+
+### Link prefixing
+
+Two idioms, because server and client components need different mechanisms:
+
+- **Client:** `usePracticeHref()` from the `PracticeProvider` the shell hands down.
+- **Server:** `practiceHref()` from `lib/practice-path-server.ts`, reading the
+  same header.
+
+`practicePath()` is idempotent and skips account paths (`/settings`, `/auth`,
+`/legal`, `/fill`), so a caller can pass any internal path without first working
+out which kind it is. Both properties are tested — double-prefixing and a
+prefixed `/settings` are the two failure modes that would otherwise appear as
+404s in odd corners of the app.
+
+### The switcher
+
+Top of the sidebar, above everything it scopes. It shows the practice name
+always, and only becomes a menu when there is more than one practice — a
+disabled control would be noise for the single-practice case, but never showing
+whose records are on screen would be worse.
+
+Switching keeps the **section** and drops record ids: patient `abc` in one
+practice is not patient `abc` in another, so carrying the full path across would
+reliably 404. `/p/a/patients/abc/sessions/xyz` → `/p/b/patients`.
+
+### Legacy links
+
+Bookmarks and notification emails point at `/patients/123` with no practice.
+Middleware forwards those to `/practice-redirect`, which resolves a practice and
+re-issues the URL with the path preserved. It refuses any `to` that is not a
+plain internal path — an open redirector is a phishing gadget.
+
+`/no-practice` is where an account with no membership lands, until practice
+onboarding ships in Phase 8.
+
+### The suicidal-ideation exception
+
+`listIdeationAlertsElsewhere()` deliberately takes the **unscoped** client and
+surfaces unread ideation alerts from the user's *other* practices, labelled with
+the practice they came from. Scoping is a privacy mechanism; it must never
+become the reason an alert like this goes unseen. It is still confined to this
+user's own notifications in practices they actively belong to, and the route is
+on the reviewed `unscopedDb` allowlist with that reasoning attached.
+
+### Verified against a running server
+
+Not just a passing build — signed in as the seeded owner and probed the routes:
+
+| Request | Result |
+|---|---|
+| `/dashboard` (legacy) | 307 → `/practice-redirect?to=/dashboard` |
+| `/p/renaissance/dashboard` | 200, practice name in shell, nav links all prefixed, no unprefixed leftovers |
+| `/p/renaissance/patients` | shows P-001, P-002 — the owner's caseload |
+| `/p/not-my-practice/dashboard` | redirects out; **zero patient names, zero practice name in the response** |
+| `/settings` | 200, unprefixed |
+| unauthenticated anything | 307 → sign-in, callbackUrl preserved including the practice path |
+
+`T. Eze` (the other clinician's patient) is correctly absent: reads still carry
+their `psychologistId` filter, which remains the deliberate Phase 3 behaviour
+until the access ladder lands in Phase 7.
+
+**Known rough edge:** when the URL names a practice the user is not in, the
+redirect is issued after streaming has begun, so Next serves a 200 with a
+one-second meta-refresh instead of a clean 307. Functionally correct and no data
+is exposed, but it is a visible pause. Fixing it properly needs the membership
+check to happen before render, which middleware cannot do without a database
+lookup. `/practice-redirect` and `/no-practice` avoid this by sitting behind the
+auth matcher.
+
+**Verified:** typecheck clean across `app/`, `lib/` and `components/`, 151 tests
+across 16 suites, lint clean for changed files, `next build` succeeds with all
+`/p/[practiceSlug]/…` routes present, seam guard passing.
 
 ---
 
@@ -352,7 +436,7 @@ different roles behaves correctly in both.
 | ~~2 · Backfill~~ | — | — | dropped — database was wiped instead |
 | ✅ 3 · Scoping + leak tests | No | Medium | 4, 5 |
 | ✅ 4 · RLS + indexes | No | Low–Med | — |
-| 5 · Context + switcher | **Yes** | Medium | 6 |
+| ✅ 5 · Context + switcher | **Yes** | Medium | 6 |
 | 6 · Invitations + team | Yes | Medium | 7 |
 | 7 · Areas + referrals | Yes | Low | — |
 | 8 · Onboarding + billing | Yes | Low | — |
@@ -373,8 +457,9 @@ different roles behaves correctly in both.
   signup lands there. Practice onboarding is what fixes it — until then, new
   accounts need a membership created by the seed or by hand.
 
-**Blocking Phase 5:**
-- Practice slug in the URL path (recommended).
+**Resolved:**
+- ~~Practice slug in the URL path~~ — decided and shipped in Phase 5 as
+  `/p/<slug>/…`.
 
 **Not blocking, decide by Phase 7:**
 - Default patient access ladder (recommended: Open).

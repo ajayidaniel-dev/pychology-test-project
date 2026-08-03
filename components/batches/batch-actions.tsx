@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -40,6 +42,8 @@ export function BatchActions({
   openLinks,
   expiredLinkCount,
 }: BatchActionsProps) {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
   const [copied, setCopied] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -93,7 +97,7 @@ export function BatchActions({
       return
     }
     toast.success("Batch deleted")
-    router.push("/batches")
+    router.push(practiceHref("/batches"))
     router.refresh()
   }
 

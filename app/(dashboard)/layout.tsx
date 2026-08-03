@@ -1,4 +1,9 @@
-import { requirePracticeContext } from "@/lib/session-context"
+import { redirect } from "next/navigation"
+import {
+  getPracticeContext,
+  getUserContext,
+  listPracticeOptions,
+} from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
 import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { getNavCounts } from "@/lib/navigation"
@@ -8,12 +13,44 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const ctx = await requirePracticeContext()
+  const ctx = await getPracticeContext()
+
+  if (!ctx) {
+    // Two different failures with the same shape here, and they need different
+    // answers. Not signed in → sign in. Signed in but the URL names a practice
+    // this user has no active membership in (or they have none at all) → the
+    // resolver deliberately refuses to fall back to a different practice, so
+    // send them somewhere they can actually be.
+    const user = await getUserContext()
+    if (!user) redirect("/auth/signin")
+
+    const options = await listPracticeOptions(user.userId)
+    // No membership at all is a real state until practice onboarding ships
+    // (Phase 8) — a fresh signup lands here.
+    if (options.length === 0) redirect("/no-practice")
+    redirect(`/p/${options[0].slug}/dashboard`)
+  }
+
   const db = scopedDb(ctx)
 
-  // Resolved server-side so badges are correct on first paint rather than
-  // popping in after hydration.
-  const counts = await getNavCounts(db, ctx.userId)
+  const [counts, options] = await Promise.all([
+    // Resolved server-side so badges are correct on first paint rather than
+    // popping in after hydration.
+    getNavCounts(db, ctx.userId),
+    listPracticeOptions(ctx.userId),
+  ])
 
-  return <DashboardShell counts={counts}>{children}</DashboardShell>
+  return (
+    <DashboardShell
+      counts={counts}
+      practice={{
+        slug: ctx.practiceSlug,
+        name: ctx.practiceName,
+        practiceId: ctx.practiceId,
+        options,
+      }}
+    >
+      {children}
+    </DashboardShell>
+  )
 }

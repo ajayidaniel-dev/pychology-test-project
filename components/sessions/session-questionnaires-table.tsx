@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -42,13 +44,15 @@ export function SessionQuestionnairesTable({
   token,
   linkExpired,
 }: SessionQuestionnairesTableProps) {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
 
   // Only a completed questionnaire has a results page. Pending and expired ones
   // have no response row, so linking them would land on a 404.
   const hrefFor = (row: SessionQuestionnaireRow) =>
     row.status === "COMPLETED"
-      ? `/patients/${patientId}/sessions/${sessionId}/questionnaires/${row.id}`
+      ? practiceHref(`/patients/${patientId}/sessions/${sessionId}/questionnaires/${row.id}`)
       : null
 
   async function onRemove(id: string) {

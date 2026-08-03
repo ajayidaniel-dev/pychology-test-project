@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { practiceHref } from "@/lib/practice-path-server"
 import { AlertTriangle, Clock, Users } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -41,7 +42,7 @@ export function StatusBand({ stats }: { stats: Stats }) {
     {
       label: "Active patients",
       value: stats.totalPatients,
-      href: "/patients",
+      href: practiceHref("/patients"),
       icon: Users,
       ariaLabel: `${stats.totalPatients} active patient${stats.totalPatients === 1 ? "" : "s"} — view patients`,
       note: "In your caseload",
@@ -75,7 +76,7 @@ export function StatusBand({ stats }: { stats: Stats }) {
     {
       label: "Awaiting response",
       value: stats.pendingSessions,
-      href: "/patients",
+      href: practiceHref("/patients"),
       icon: Clock,
       ariaLabel: `${stats.pendingSessions} assessment${stats.pendingSessions === 1 ? "" : "s"} awaiting patient response`,
       note: "Links sent, not yet returned",

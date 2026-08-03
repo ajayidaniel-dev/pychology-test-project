@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { ChevronRight } from "lucide-react"
@@ -91,15 +93,17 @@ const columns: ColumnDef<BatchListItem>[] = [
 ]
 
 export function BatchListTable({ batches }: { batches: BatchListItem[] }) {
+  const practiceHref = usePracticeHref()
+
   return (
     <TanStackDataTable
       columns={columns}
       data={batches}
-      getRowHref={(row) => `/batches/${row.id}`}
+      getRowHref={(row) => practiceHref(`/batches/${row.id}`)}
       mobileListClassName="divide-y"
       renderMobileRow={(row) => (
         <Link
-          href={`/batches/${row.id}`}
+          href={practiceHref(`/batches/${row.id}`)}
           className="block min-h-18 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-2">

@@ -11,7 +11,9 @@ export const metadata = {
 
 export default async function RootPage() {
   const ctx = await getUserContext()
-  if (ctx) redirect("/dashboard")
+  // Resolving which practice happens in /practice-redirect, which has the
+  // membership lookup; the landing page should not grow one.
+  if (ctx) redirect("/practice-redirect")
 
   return <LandingOverwatch />
 }

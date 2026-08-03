@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -33,6 +35,8 @@ export function NewSessionDialog({
   patientId: string
   patientHasDetails?: boolean
 }) {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
@@ -78,7 +82,7 @@ export function NewSessionDialog({
     toast.success("Session created")
     // Land on the session so the next step — attaching questionnaires — is
     // where the clinician already is.
-    router.push(`/patients/${patientId}/sessions/${created.id}`)
+    router.push(practiceHref(`/patients/${patientId}/sessions/${created.id}`))
   }
 
   return (

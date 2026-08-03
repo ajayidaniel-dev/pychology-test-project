@@ -41,6 +41,11 @@ const UNSCOPED_ALLOWED = new Set([
   'app/api/settings/password/route.ts',
   'app/api/settings/profile/route.ts',
   'app/(dashboard)/settings/page.tsx',
+  // Suicidal-ideation alerts from the user's other practices. The one
+  // deliberate exception to scoping: a scoped client cannot see across the
+  // boundary, which is exactly what this needs to do. Still confined to this
+  // user's own notifications in practices they are an active member of.
+  'app/api/notifications/route.ts',
 ])
 
 function walk(dir) {

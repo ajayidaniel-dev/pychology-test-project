@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { TanStackDataTable } from "@/components/data-table/data-table"
@@ -22,8 +24,10 @@ export interface BatchSessionRow {
 }
 
 export function BatchSessionsTable({ rows }: { rows: BatchSessionRow[] }) {
+  const practiceHref = usePracticeHref()
+
   const hrefFor = (row: BatchSessionRow) =>
-    `/patients/${row.patientId}/sessions/${row.sessionId}`
+    practiceHref(`/patients/${row.patientId}/sessions/${row.sessionId}`)
 
   const columns: ColumnDef<BatchSessionRow>[] = [
     {

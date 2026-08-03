@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { practiceHref } from "@/lib/practice-path-server"
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -123,7 +124,7 @@ export default async function DashboardPage() {
                   consent.
                 </p>
                 <Button asChild>
-                  <Link href="/patients">Add your first patient</Link>
+                  <Link href={practiceHref("/patients")}>Add your first patient</Link>
                 </Button>
               </div>
             </li>
@@ -140,7 +141,7 @@ export default async function DashboardPage() {
                   crossing a clinical threshold is raised here.
                 </p>
                 <Button variant="outline" asChild>
-                  <Link href="/scales">Browse the scale library</Link>
+                  <Link href={practiceHref("/scales")}>Browse the scale library</Link>
                 </Button>
               </div>
             </li>

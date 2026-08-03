@@ -44,7 +44,7 @@ function safeCallbackUrl(raw: string | null): string {
       // fall through to default
     }
   }
-  return "/dashboard"
+  return "/practice-redirect"
 }
 
 export function SignInForm() {

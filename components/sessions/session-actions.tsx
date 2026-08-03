@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -61,6 +63,8 @@ export function SessionActions({
   linkExpired,
   kind = "APPOINTMENT",
 }: SessionActionsProps) {
+  const practiceHref = usePracticeHref()
+
   const isDirect = kind === "DIRECT"
   // "Session" is the wrong noun for something nobody booked.
   const noun = isDirect ? "send" : "session"
@@ -113,7 +117,7 @@ export function SessionActions({
       return
     }
     toast.success(isDirect ? "Send deleted" : "Session deleted")
-    router.push(`/patients/${patientId}`)
+    router.push(practiceHref(`/patients/${patientId}`))
     router.refresh()
   }
 

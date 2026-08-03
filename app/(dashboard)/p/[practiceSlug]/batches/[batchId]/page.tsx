@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { practiceHref } from "@/lib/practice-path-server"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, Link2Off } from "lucide-react"
@@ -108,7 +109,7 @@ export default async function BatchDetailPage({
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href="/batches">Batches</Link>
+                <Link href={practiceHref("/batches")}>Batches</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />
@@ -158,7 +159,7 @@ export default async function BatchDetailPage({
             className="-ml-2 h-8 gap-1 px-2"
             asChild
           >
-            <Link href="/batches">
+            <Link href={practiceHref("/batches")}>
               <ArrowLeft className="size-4" />
               Back to batches
             </Link>

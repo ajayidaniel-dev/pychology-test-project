@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { practiceHref } from "@/lib/practice-path-server"
 import { formatDistanceToNowStrict } from "date-fns"
 import { AlertTriangle, Bell } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -165,7 +166,7 @@ export function AlertFeed({ sessions }: { sessions: SessionWithPatient[] }) {
                 )}
                 <Button variant="outline" size="sm" className="shrink-0" asChild>
                   <Link
-                    href={`/patients/${session.patientId}/sessions/${session.sessionId}/questionnaires/${session.id}`}
+                    href={practiceHref(`/patients/${session.patientId}/sessions/${session.sessionId}/questionnaires/${session.id}`)}
                   >
                     Review
                     <span className="sr-only">

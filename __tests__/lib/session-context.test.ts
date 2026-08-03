@@ -17,6 +17,20 @@ jest.mock("@/lib/auth", () => ({
   authOptions: {},
 }))
 
+const requestHeaders = new Map<string, string>()
+let requestCookie: string | undefined
+
+jest.mock("next/headers", () => ({
+  __esModule: true,
+  headers: () => requestHeaders,
+  cookies: () => ({
+    get: (name: string) =>
+      name === "apas_practice" && requestCookie
+        ? { name, value: requestCookie }
+        : undefined,
+  }),
+}))
+
 jest.mock("@/lib/prisma", () => ({
   __esModule: true,
   default: { membership: { findFirst: jest.fn() } },
@@ -51,6 +65,8 @@ const signedIn = () =>
 describe("session context", () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    requestHeaders.clear()
+    requestCookie = undefined
   })
 
   describe("getUserContext", () => {
@@ -125,6 +141,7 @@ describe("session context", () => {
         id: "m1",
         practiceId: "p1",
         role: "CLINICIAN",
+        practice: { slug: "renaissance", name: "Renaissance" },
       })
 
       await expect(getPracticeContext()).resolves.toEqual({
@@ -132,6 +149,8 @@ describe("session context", () => {
         email: "clinician@example.com",
         name: "Ada",
         practiceId: "p1",
+        practiceSlug: "renaissance",
+        practiceName: "Renaissance",
         membershipId: "m1",
         role: "CLINICIAN",
       })
@@ -145,9 +164,43 @@ describe("session context", () => {
       await expect(getPracticeContext()).resolves.toBeNull()
       expect(mockFindFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: "u1", status: "ACTIVE" },
+          where: expect.objectContaining({ userId: "u1", status: "ACTIVE" }),
         }),
       )
+    })
+
+    it("uses the practice named in the URL", async () => {
+      signedIn()
+      requestHeaders.set("x-practice-slug", "lekki")
+      mockFindFirst.mockResolvedValue({
+        id: "m2",
+        practiceId: "p2",
+        role: "OWNER",
+        practice: { slug: "lekki", name: "Lekki" },
+      })
+
+      await expect(getPracticeContext()).resolves.toMatchObject({
+        practiceSlug: "lekki",
+      })
+      expect(mockFindFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ practice: { slug: "lekki" } }),
+        }),
+      )
+    })
+
+    it("refuses to fall back when the URL names a practice the user is not in", async () => {
+      // The security-critical branch introduced by putting the slug in the
+      // path. Falling back to another membership here would render one
+      // practice under another practice's URL — silently the wrong records.
+      signedIn()
+      requestHeaders.set("x-practice-slug", "not-mine")
+      requestCookie = "renaissance"
+      mockFindFirst.mockResolvedValue(null)
+
+      await expect(getPracticeContext()).resolves.toBeNull()
+      // One lookup only: no cookie or first-membership fallback attempted.
+      expect(mockFindFirst).toHaveBeenCalledTimes(1)
     })
 
     it("returns null when signed out, without querying memberships", async () => {

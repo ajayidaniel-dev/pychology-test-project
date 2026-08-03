@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { getPracticeContext, practiceContextFailure } from "@/lib/session-context"
-import { scopedDb } from "@/lib/db"
+import { scopedDb, unscopedDb } from "@/lib/db"
 import {
+  listIdeationAlertsElsewhere,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -20,9 +21,19 @@ export async function GET() {
   const db = scopedDb(ctx)
 
   await reconcileOperationalNotifications(db, ctx.userId)
-  const { items, unreadCount } = await listNotifications(db, ctx.userId)
 
-  return NextResponse.json({ items, unreadCount })
+  const [{ items, unreadCount }, elsewhere] = await Promise.all([
+    listNotifications(db, ctx.userId),
+    // Deliberately unscoped — see listIdeationAlertsElsewhere. A suicidal
+    // ideation alert must reach the clinician whichever practice they happen
+    // to be looking at.
+    listIdeationAlertsElsewhere(unscopedDb, ctx.userId, ctx.practiceId),
+  ])
+
+  return NextResponse.json({
+    items: [...elsewhere, ...items],
+    unreadCount: unreadCount + elsewhere.length,
+  })
 }
 
 export async function PATCH(req: NextRequest) {

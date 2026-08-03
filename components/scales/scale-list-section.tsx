@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { BookOpen } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -25,6 +27,8 @@ export function ScaleListSection({
   libraryScales,
   myScales,
 }: ScaleListSectionProps) {
+  const practiceHref = usePracticeHref()
+
   return (
     <div className="flex flex-col gap-8">
       <section className="space-y-3">
@@ -58,7 +62,7 @@ export function ScaleListSection({
             description="Create a custom questionnaire tailored to your practice."
             action={
               <Button asChild>
-                <Link href="/scales/new">Create your first scale</Link>
+                <Link href={practiceHref("/scales/new")}>Create your first scale</Link>
               </Button>
             }
           />

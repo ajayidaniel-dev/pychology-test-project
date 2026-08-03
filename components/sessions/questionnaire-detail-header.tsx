@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { practiceHref } from "@/lib/practice-path-server"
 import { ArrowLeft, FileText } from "lucide-react"
 import {
   Breadcrumb,
@@ -35,7 +36,7 @@ export function QuestionnaireDetailHeader({
   severity,
 }: QuestionnaireDetailHeaderProps) {
   const formattedDate = new Date(completedAt).toLocaleDateString()
-  const sessionHref = `/patients/${patientId}/sessions/${sessionId}`
+  const sessionHref = practiceHref(`/patients/${patientId}/sessions/${sessionId}`)
 
   return (
     <div className="space-y-3">
@@ -43,13 +44,13 @@ export function QuestionnaireDetailHeader({
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/patients">Patients</Link>
+              <Link href={practiceHref("/patients")}>Patients</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/patients/${patientId}`}>{anonymousId}</Link>
+              <Link href={practiceHref(`/patients/${patientId}`)}>{anonymousId}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />

@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { formatDistanceToNowStrict } from "date-fns"
@@ -142,6 +144,8 @@ const columns: ColumnDef<CaseloadPatient>[] = [
 ]
 
 export function CaseloadTable({ patients }: { patients: CaseloadPatient[] }) {
+  const practiceHref = usePracticeHref()
+
   const hasScales = patients.some((p) => p.latestScaleName != null)
   const hasScores = patients.some((p) => p.latestScore != null)
   const hasHistory = patients.some((p) => p.scoreHistory.length >= 2)
@@ -158,7 +162,7 @@ export function CaseloadTable({ patients }: { patients: CaseloadPatient[] }) {
     <TanStackDataTable
       columns={visibleColumns}
       data={patients}
-      getRowHref={(row) => `/patients/${row.id}`}
+      getRowHref={(row) => practiceHref(`/patients/${row.id}`)}
       shell={false}
       // A critical row should not carry the same visual weight as a resolved
       // one. Weight comes from ink, not from a colour wash — a tinted row would
@@ -169,7 +173,7 @@ export function CaseloadTable({ patients }: { patients: CaseloadPatient[] }) {
       mobileListClassName="divide-y"
       renderMobileRow={(row) => (
         <Link
-          href={`/patients/${row.id}`}
+          href={practiceHref(`/patients/${row.id}`)}
           className="block min-h-18 px-4 py-3 transition-colors duration-150 ease-out-quart hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-2">

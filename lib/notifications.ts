@@ -1,5 +1,6 @@
 import { NotificationType, type Notification } from "@prisma/client"
 import type { PrismaLike } from "@/lib/db"
+import { practicePath } from "@/lib/practice-path"
 import prisma from "@/lib/prisma"
 import { isNotificationEnabled } from "@/lib/notification-preferences"
 import { computeAlerts } from "@/lib/alert-rules"
@@ -335,6 +336,49 @@ export async function listNotifications(
   })
 
   return { items: enriched, unreadCount }
+}
+
+/**
+ * Unread suicidal-ideation alerts from the user's *other* practices.
+ *
+ * The one deliberate exception to practice scoping. Everything else in APAS is
+ * confined to the active practice, and rightly so — but a clinician who happens
+ * to be looking at Practice B must not be the last to know that a patient in
+ * Practice A endorsed suicidal ideation. Scoping is a privacy mechanism; it
+ * should never become a reason an alert like this goes unseen.
+ *
+ * Takes the **unscoped** client on purpose: a scoped one cannot see across the
+ * boundary, which is the entire point here. It is still confined to this user's
+ * own notifications, in practices they hold an active membership in — the
+ * membership check is what keeps this from being a hole.
+ *
+ * The practice name is folded into the body so the alert is unmistakably
+ * attributed even in surfaces that only render title and body.
+ */
+export async function listIdeationAlertsElsewhere(
+  db: PrismaLike,
+  userId: string,
+  activePracticeId: string,
+): Promise<Notification[]> {
+  const rows = await db.notification.findMany({
+    where: {
+      userId,
+      type: NotificationType.SUICIDAL_IDEATION,
+      readAt: null,
+      practiceId: { not: null, notIn: [activePracticeId] },
+      practice: { memberships: { some: { userId, status: "ACTIVE" } } },
+    },
+    include: { practice: { select: { slug: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  })
+
+  return rows.map(({ practice, ...item }) => ({
+    ...item,
+    body: practice ? `${item.body} — ${practice.name}` : item.body,
+    href: practice
+      ? practicePath(practice.slug, resolveNotificationHref(item) ?? "/dashboard")
+      : resolveNotificationHref(item),
+  }))
 }
 
 export async function markNotificationRead(

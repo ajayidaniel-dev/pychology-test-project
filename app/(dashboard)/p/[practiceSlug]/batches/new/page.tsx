@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { practiceHref } from "@/lib/practice-path-server"
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { requirePracticeContext } from "@/lib/session-context"
@@ -63,7 +64,7 @@ export default async function NewBatchPage({
 
       <div>
         <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
-          <Link href="/batches">
+          <Link href={practiceHref("/batches")}>
             <ArrowLeft className="size-4" />
             Back to batches
           </Link>

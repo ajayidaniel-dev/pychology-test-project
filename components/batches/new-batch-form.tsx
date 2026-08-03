@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -77,6 +79,8 @@ export function NewBatchForm({
   scales,
   defaultKind = "APPOINTMENT",
 }: NewBatchFormProps) {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
   const [kind, setKind] = useState<BatchKind>(defaultKind)
   const [title, setTitle] = useState("")
@@ -148,7 +152,7 @@ export function NewBatchForm({
         selectedPatientIds.length
       } patient${selectedPatientIds.length === 1 ? "" : "s"}`,
     )
-    router.push(`/batches/${batch.id}`)
+    router.push(practiceHref(`/batches/${batch.id}`))
   }
 
   if (patients.length === 0) {

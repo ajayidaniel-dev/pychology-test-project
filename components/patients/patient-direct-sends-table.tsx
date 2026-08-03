@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { ChevronRight } from "lucide-react"
@@ -92,13 +94,15 @@ export function PatientDirectSendsTable({
   patientId,
   sends,
 }: PatientDirectSendsTableProps) {
+  const practiceHref = usePracticeHref()
+
   return (
     <TanStackDataTable
       columns={buildColumns()}
       data={sends}
       shell={false}
       isRowClickable={() => true}
-      getRowHref={(row) => `/patients/${patientId}/sessions/${row.id}`}
+      getRowHref={(row) => practiceHref(`/patients/${patientId}/sessions/${row.id}`)}
       mobileListClassName="divide-y"
       renderMobileRow={(send) => (
         <div className="px-4 py-3">
@@ -114,7 +118,7 @@ export function PatientDirectSendsTable({
 
           <div className="mt-3 flex gap-2">
             <Button variant="outline" size="sm" className="flex-1" asChild>
-              <Link href={`/patients/${patientId}/sessions/${send.id}`}>
+              <Link href={practiceHref(`/patients/${patientId}/sessions/${send.id}`)}>
                 Open
               </Link>
             </Button>

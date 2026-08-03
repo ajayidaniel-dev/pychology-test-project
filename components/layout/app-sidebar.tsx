@@ -15,6 +15,9 @@ import {
 import { NavUser } from "@/components/layout/nav-user"
 import { SidebarCollapseTrigger } from "@/components/layout/sidebar-collapse-trigger"
 import { useCommandPalette } from "@/components/layout/command-palette"
+import { PracticeSwitcher } from "@/components/layout/practice-switcher"
+import { usePracticeHref } from "@/components/layout/practice-provider"
+import { stripPracticePrefix } from "@/lib/practice-path"
 import { Button } from "@/components/ui/button"
 import type { NavCounts } from "@/lib/navigation"
 import {
@@ -92,6 +95,7 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
   const pathname = usePathname()
   const { isMobile, setOpenMobile } = useSidebar()
   const { setOpen: setPaletteOpen } = useCommandPalette()
+  const practiceHref = usePracticeHref()
 
   useEffect(() => {
     setOpenMobile(false)
@@ -128,7 +132,7 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
               className="group-data-[collapsible=icon]:size-9! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0!"
             >
               <Link
-                href="/dashboard"
+                href={practiceHref("/dashboard")}
                 onClick={closeMobile}
                 className="group-data-[collapsible=icon]:justify-center"
               >
@@ -145,6 +149,11 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+
+        {/* The switcher sits above everything it scopes. Every nav item, badge
+            and search result below this line is filtered by the practice chosen
+            here, so it cannot live in the account menu at the foot of the rail. */}
+        <PracticeSwitcher />
 
         {/* Search sits in the rail, above navigation — it is the fastest route
             to any record once a caseload outgrows browsing. */}
@@ -184,16 +193,17 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
               <SidebarMenu>
                 {group.items.map(
                   ({ href, label, icon: Icon, exact, badge, badgeTone }) => {
+                    const relative = stripPracticePrefix(pathname)
                     const active = exact
-                      ? pathname === href
-                      : pathname === href || pathname.startsWith(`${href}/`)
+                      ? relative === href
+                      : relative === href || relative.startsWith(`${href}/`)
                     const count = badge ? counts[badge] : 0
                     const critical = badgeTone === "critical"
 
                     return (
                       <SidebarMenuItem key={href}>
                         <SidebarMenuButton asChild isActive={active} tooltip={label}>
-                          <Link href={href} onClick={closeMobile}>
+                          <Link href={practiceHref(href)} onClick={closeMobile}>
                             <Icon />
                             <span className="flex-1">{label}</span>
                             {count > 0 && (

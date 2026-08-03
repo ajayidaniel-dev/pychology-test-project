@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { practiceHref } from "@/lib/practice-path-server"
 import { ArrowLeft } from "lucide-react"
 import {
   Breadcrumb,
@@ -61,13 +62,13 @@ export function SessionHeader({
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href="/patients">Patients</Link>
+              <Link href={practiceHref("/patients")}>Patients</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link href={`/patients/${patientId}`}>{anonymousId}</Link>
+              <Link href={practiceHref(`/patients/${patientId}`)}>{anonymousId}</Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
@@ -110,7 +111,7 @@ export function SessionHeader({
 
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" size="sm" className="-ml-2 h-8 gap-1 px-2" asChild>
-          <Link href={`/patients/${patientId}`}>
+          <Link href={practiceHref(`/patients/${patientId}`)}>
             <ArrowLeft className="size-4" />
             Back to patient
           </Link>
