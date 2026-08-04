@@ -1,0 +1,58 @@
+{
+  "documentType": "report",
+  "metadata": {
+    "title": "Product Requirements Document — APAS",
+    "subject": "PRD for APAS Clinical Overwatch",
+    "creator": "APAS Product",
+    "description": "Product Requirements Document v1.0, 4 August 2026",
+    "language": "en-GB"
+  },
+  "toc": {
+    "title": "Contents",
+    "minDepth": 1,
+    "maxDepth": 2
+  },
+  "style": {
+    "fontFamily": "Calibri",
+    "fontSize": 22,
+    "headingFontFamily": "Calibri Light",
+    "heading1Alignment": "LEFT",
+    "heading2Alignment": "LEFT",
+    "heading3Alignment": "LEFT",
+    "paragraphAlignment": "LEFT",
+    "heading1Color": "1F2937",
+    "heading2Color": "111827",
+    "heading3Color": "374151",
+    "paragraphColor": "1F2937",
+    "tableLayout": "autofit",
+    "tocFontSize": 22,
+    "tocHeading1FontSize": 24,
+    "tocHeading1Bold": true,
+    "tocHeading2FontSize": 22,
+    "tocHeading2Bold": false
+  },
+  "tableWidthTwips": 9360,
+  "template": {
+    "headers": {
+      "default": {
+        "text": "APAS · Product Requirements Document",
+        "alignment": "LEFT"
+      }
+    },
+    "footers": {
+      "default": {
+        "text": "Confidential · Internal · v1.0",
+        "alignment": "LEFT"
+      }
+    },
+    "pageNumbering": {
+      "display": "current",
+      "alignment": "CENTER",
+      "formatType": "decimal",
+      "start": 1
+    }
+  },
+  "codeHighlighting": {
+    "enabled": false
+  }
+}

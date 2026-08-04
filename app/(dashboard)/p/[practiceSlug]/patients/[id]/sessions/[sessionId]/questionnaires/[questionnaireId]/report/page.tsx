@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { requirePracticeContext } from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
+import { can } from "@/lib/roles"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { PrintButton } from "@/components/sessions/print-button"
@@ -40,6 +41,7 @@ export default async function QuestionnaireReportPage({
   params: { id: string; sessionId: string; questionnaireId: string }
 }) {
   const ctx = await requirePracticeContext()
+  if (!can(ctx.role, "viewScores")) notFound()
   const db = scopedDb(ctx)
 
   const questionnaire = await db.questionnaire.findFirst({

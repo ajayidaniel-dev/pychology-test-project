@@ -6,10 +6,10 @@ import { PageHeader } from "@/components/layout/page-header"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 
 export const metadata: Metadata = {
-  title: "Settings",
+  title: "Account",
 }
 
-export default async function SettingsPage() {
+export default async function AccountPage() {
   const ctx = await requireUser()
 
   const user = await prisma.user.findUnique({
@@ -20,12 +20,12 @@ export default async function SettingsPage() {
   if (!user) redirect("/auth/signin")
 
   return (
-    // Settings is a form column, not a data surface: constrained to a readable
-    // measure so inputs don't stretch the full dashboard width.
+    // Account settings follow the human across practices: constrained to a
+    // readable measure so inputs don't stretch the full dashboard width.
     <div className="flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
-        title="Settings"
-        description="Manage your profile, password, and notification preferences."
+        title="Account"
+        description="Your profile, password, and notification preferences — shared across every practice you belong to."
         hideTitleOnMobile
       />
 

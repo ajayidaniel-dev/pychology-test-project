@@ -241,6 +241,105 @@ The activation runbook is in the plan document.
 
 ---
 
+## Part 6 — Phase 5: practice context becomes real
+
+**The first phase a user can see.** Everything before this was invisible by
+design; this is where practices appear in the product.
+
+### Slug in the path
+
+Decided and shipped: every tenant-owned URL is now `/p/<slug>/…`. The four route
+trees moved under `app/(dashboard)/p/[practiceSlug]/`; `/settings` stayed put,
+because it belongs to the human rather than any practice.
+
+The alternative — keeping the practice only in the session — was rejected
+because the same URL would then resolve to different data for different people.
+A link pasted into Slack has to mean one thing.
+
+The slug is authoritative. Middleware lifts it out of the pathname into a
+request header, **stripping any inbound value first** so a client cannot send
+`x-practice-slug` itself and name a practice the URL never mentioned. Server
+components cannot read the pathname, and threading a param through every page
+and helper would mean every data access having to be told which practice it is
+in; the header keeps that in one place.
+
+Resolution order: **URL slug → last-used cookie → earliest membership.** The
+cookie is a preference, not a grant — access is always re-derived from
+membership, so a tampered value selects nothing the user could not already reach.
+
+**The security-critical branch:** when the URL names a practice the user has no
+active membership in, resolution returns null rather than falling back. Falling
+back would render one practice's records under another practice's URL. A test
+asserts that exactly one lookup happens, so no fallback can creep back in later.
+
+### Link prefixing
+
+Two idioms, because server and client components need different mechanisms —
+`usePracticeHref()` from a provider the shell hands down, and `practiceHref()`
+reading the same header on the server.
+
+`practicePath()` is idempotent and skips account paths, so any internal path can
+be passed to it without the caller first working out which kind it is. Both
+properties are tested: double-prefixing and a prefixed `/settings` are exactly
+the failures that would otherwise surface as 404s in odd corners weeks later.
+
+### The switcher
+
+Top of the sidebar, above everything it scopes — not in the account menu, which
+is the usual shortcut and would bury the one thing a clinician working across
+two clinics must never be wrong about.
+
+It shows the practice name always, and only becomes a menu when there is more
+than one practice: a disabled control is noise, but never showing whose records
+are on screen would be worse. Switching keeps the **section** and drops record
+ids, because patient `abc` in one practice is not patient `abc` in another.
+
+### Legacy links and the ideation exception
+
+Bookmarks and notification emails point at `/patients/123` with no practice.
+Middleware forwards those to `/practice-redirect`, which resolves a practice and
+re-issues the URL with the path preserved — refusing any `to` that is not a
+plain internal path, since an open redirector is a phishing gadget.
+
+`listIdeationAlertsElsewhere()` deliberately takes the **unscoped** client and
+surfaces unread suicidal-ideation alerts from the user's *other* practices,
+labelled with where they came from. Scoping is a privacy mechanism; it must
+never become the reason an alert like this goes unseen. Still confined to this
+user's own notifications in practices they actively belong to.
+
+### Verified against a running server
+
+A passing build is not evidence for a routing change, so this was probed signed
+in as the seeded owner:
+
+| Request | Result |
+|---|---|
+| `/p/renaissance/dashboard` | 200 · practice name in shell · **all nav links prefixed, zero unprefixed leftovers** |
+| `/p/renaissance/patients` | P-001, P-002 — the owner's caseload |
+| `/dashboard` (legacy) | 307 → `/practice-redirect?to=/dashboard` |
+| `/p/not-my-practice/dashboard` | redirects out · **zero patient names, zero practice name in the body** |
+| `/settings` | 200, unprefixed |
+| unauthenticated anything | 307 → sign-in, callbackUrl preserved including the practice path |
+
+`T. Eze`, the other clinician's patient, is correctly absent: reads still carry
+their `psychologistId` filter, which remains deliberate until Phase 7.
+
+**Known rough edge.** When the URL names a practice the user is not in, the
+redirect is issued after streaming has begun, so Next serves a 200 with a
+one-second meta-refresh rather than a clean 307. Functionally correct and no data
+is exposed — verified — but it is a visible pause. Fixing it properly needs the
+membership check before render, which middleware cannot do without a database
+lookup. `/practice-redirect` and `/no-practice` avoid it by sitting behind the
+auth matcher.
+
+### A design-system catch
+
+The hook flagged an arbitrary `text-[10px]` in the switcher. DESIGN.md's type
+ramp bottoms out at `text-xs` and states a Fixed Scale Rule explicitly, so the
+documented step was used instead.
+
+---
+
 ## Testing
 
 `__tests__/integration/tenant-isolation.test.ts` — 15 tests against a real

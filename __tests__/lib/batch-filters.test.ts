@@ -25,6 +25,8 @@ function patient(
     delta: null,
     scoreHistory: [],
     lastAssessedAt,
+    latestMaxScore: null,
+    latestThreshold: null,
   }
 }
 

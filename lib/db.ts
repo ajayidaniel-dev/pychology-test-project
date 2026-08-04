@@ -27,6 +27,8 @@ const STRICT_TENANT_MODELS = new Set([
   'Membership',
   'PracticeInvitation',
   'AuditEntry',
+  'CareTeamMember',
+  'Referral',
 ])
 
 const READ_OPERATIONS = new Set([

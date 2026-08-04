@@ -6,14 +6,15 @@ export const metadata = {
 
 export default function DataRetentionPage() {
   return (
-    <LegalArticle title="Data retention policy" lastUpdated="July 16, 2026">
+    <LegalArticle title="Data retention policy" lastUpdated="August 4, 2026">
       <h2>The principle</h2>
       <p>
-        APAS keeps clinical data for as long as it serves the treating
-        clinician&apos;s care of the patient, and no longer. Longitudinal
-        tracking is the product&apos;s purpose — severity trends only exist if
-        history is kept — so retention defaults to the life of the clinical
-        relationship, with deletion available at any time.
+        Patient data is retained for the practice that owns the record, for as
+        long as it serves that practice&apos;s care of the patient, and no
+        longer. Longitudinal tracking is the product&apos;s purpose — severity
+        trends only exist if history is kept — so retention defaults to the
+        life of the clinical relationship, with deletion available at any time
+        to authorised practice staff.
       </p>
 
       <h2>What is kept, and for how long</h2>
@@ -42,17 +43,17 @@ export default function DataRetentionPage() {
       <h2>Deletion</h2>
       <ul>
         <li>
-          A clinician can delete a patient record at any time. Deletion
-          removes the patient&apos;s assessment history, scores, and any
-          identity details.
+          Authorised practice staff can delete a patient record at any time.
+          Deletion removes the patient&apos;s assessment history, scores, and
+          any identity details for that practice.
         </li>
         <li>
-          Deleting a clinician account removes the account and the patient
-          records it holds.
+          Leaving a practice or deleting a staff account does not delete the
+          practice&apos;s patient records; those remain with the practice.
         </li>
         <li>
-          Patients may request deletion through their clinician, who controls
-          the records.
+          Patients may request deletion through their practice / clinician,
+          who control the records.
         </li>
       </ul>
       <p>

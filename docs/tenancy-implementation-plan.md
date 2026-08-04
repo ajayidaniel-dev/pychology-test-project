@@ -1,6 +1,6 @@
 # Tenancy Implementation Plan
 
-**Status:** phases 0–5 done · phase 2 dropped · RLS shipped dormant · drafted and last updated 2026-08-03
+**Status:** phases 0–7 done · phase 2 dropped · RLS shipped dormant · drafted and last updated 2026-08-04
 **Design:** [multi-tenancy-design.md](./multi-tenancy-design.md) · [information-architecture.md](./information-architecture.md)
 
 ---
@@ -388,42 +388,128 @@ across 16 suites, lint clean for changed files, `next build` succeeds with all
 
 ---
 
-## Phase 6 — Multiple people per practice
+## Phase 6 — Multiple people per practice ✅ done 2026-08-04
 
-1. Invitations: create, send, accept, revoke, expire.
-2. The **existing-user accept path** — one click, in-app, no second signup. This
-   is the flow that makes multi-practice work and the one usually built badly.
-3. Team screen: members, roles, status, offboarding.
-4. Role enforcement across API and navigation — filtered, never
-   rendered-then-disabled.
-5. Offboarding: membership → `departed`, access ends, authorship persists, block
-   if patients would be left unassigned.
+**The second visible product phase.** People can invite colleagues, accept into
+a second practice without creating a second account, and leave — with the role
+matrix enforced on nav and the clinical APIs that matter most.
 
-**Verification:** a test user holding memberships in two practices with
-different roles behaves correctly in both.
-**Risk:** medium.
+### Invitations
+
+`PracticeInvitation` was already in the schema; this phase wired the product
+surface:
+
+- Owner/Admin create from `/p/<slug>/team` — role chosen up front (never Owner).
+- Email via the existing mailer (logged in dev); existing users also get an
+  in-app `PRACTICE_INVITATION` notification.
+- Accept at `/invitations/[token]` — public peek, session required to act.
+- **Existing-user path:** email match → one-click accept → second membership,
+  same `User` row. Covered by the integration suite.
+- Revoke, decline, opportunistic expiry (7 days). Pending invites surface on
+  `/no-practice` for accounts that have nowhere to land yet.
+- Practices in `PENDING_VERIFICATION` cannot invite (verification gate).
+
+### Team screen
+
+`/p/<slug>/team` — members (role, status, caseload count), pending invitations,
+role changes, offboarding. Nav item sits in a Practice group and is **omitted**
+for anyone without `manageTeam`, never greyed out.
+
+### Role enforcement
+
+`lib/roles.ts` holds the capability matrix from the IA doc. Applied to:
+
+- Team APIs and page (Owner/Admin)
+- Notes APIs + Notes UI (not Admin, not Front desk)
+- Scores / narrative APIs + report page + score tabs (same)
+
+Front desk can still schedule and see patients; they cannot read notes or
+scores. Admin can run the practice; they cannot read clinical content.
+
+### Offboarding
+
+Membership → `DEPARTED` with `leftAt` set. Row kept. Blocked while the member
+is still the responsible clinician for any patient. Last Owner cannot leave.
+Audit entries written for invite/accept/decline/revoke/role-change/offboard.
+
+### Seed
+
+Harbor Clinical Centre (`harbor`) added alongside Renaissance.
+`owner@apas.test` is **Owner** at renaissance and **Clinician** at harbor —
+the Phase 6 verification fixture for multi-practice different roles.
+
+**Verified:** unit + integration tests for roles, invitation helpers, accept /
+revoke / decline / offboard-with-patients; seam guard unchanged (invitation
+flows use `unscopedDb` inside `lib/`, not under `app/`).
 
 ---
 
-## Phase 7 — Areas, care teams, referrals
+## Phase 7 — Areas, care teams, referrals ✅ done 2026-08-04
 
-1. Area CRUD; assign memberships and patients to areas.
-2. Patient access ladder (Open / area-scoped / assigned-only) as a practice setting.
-3. Care teams on patients.
-4. Internal referrals: the `drafted → sent → accepted/declined → in progress →
-   completed` workflow, with an inbox and outbox.
+**Life inside the wall.** Areas are rooms; the practice is still the only
+security boundary. Sharing a patient is adding an area or a care-team member —
+no consent grant.
 
-**Risk:** low — additive on a solid foundation.
+### Access ladder
+
+`Practice.patientAccess` — `OPEN` (default) / `AREA_SCOPED` / `ASSIGNED_ONLY`.
+Editable on `/p/<slug>/areas`. Owner/Admin always see the full caseload;
+everyone else follows the ladder via `patientVisibilityWhere()` /
+`findAccessiblePatient()`. Patient list, dashboard, detail, and notes use it.
+
+### Areas
+
+CRUD at `/p/<slug>/areas` (Owner/Admin). Assign on patient Details tab and at
+invite time (`PracticeInvitation.areaIds` → `MembershipArea` on accept).
+
+### Care teams
+
+`CareTeamMember` model. Managed on the patient Details tab. Feeds ASSIGNED_ONLY
+and AREA_SCOPED visibility.
+
+### Referrals
+
+`Referral` workflow: drafted → sent → accepted/declined → in progress →
+completed. Inbox/outbox at `/p/<slug>/referrals`. Nav appears only when the
+practice has at least one area. Accept adds the target area and puts the
+receiver on the care team.
+
+**Verified:** unit tests for access ladder + roles; integration tests for
+referral accept/decline side effects.
 
 ---
 
-## Phase 8 — Onboarding and settings
+## Phase 8 — Onboarding and settings ✅
 
-1. Practice creation flow, verification gate, areas setup.
-2. Split `/settings` into Practice (role-gated) and Account (per human).
-3. Practice branding on questionnaire links; rewrite `/legal/*` to name the
-   practice as data controller.
-4. Billing: seats = active memberships.
+### Practice creation and verification
+
+Self-serve at `/onboarding` (also linked from `/no-practice`). Creates a
+`PENDING_VERIFICATION` practice, Owner membership, and default areas.
+Activation is Owner-only once registration number + contact email are present
+(`POST /api/practice/activate`). Until `ACTIVE`, patient create and invites
+return 403 (`practiceNotActive`). Banner in the shell points Owners/Admins at
+practice settings.
+
+### Settings split
+
+- **Practice** — `/p/<slug>/settings` (Owner/Admin): profile, branding tagline,
+  activate, access ladder.
+- **Account** — `/account` (per human): profile, password, notifications.
+  Legacy `/settings` redirects here. Practice nav uses relative `/settings` for
+  the practice page (prefixed by `practicePath`).
+
+### Branding and legal
+
+Fill shell and consent name the practice as controller; APAS is the platform.
+Optional tagline from `Practice.settings.branding.tagline`. `/legal/*` updated.
+
+### Billing
+
+`/p/<slug>/billing` (Owner): seats = `ACTIVE` memberships; checkout placeholder
+(no Stripe yet). `GET /api/billing/seats`.
+
+**Verified:** unit tests for slug helpers, practice gate, practice-path account
+vs practice settings.
 
 ---
 
@@ -437,9 +523,9 @@ different roles behaves correctly in both.
 | ✅ 3 · Scoping + leak tests | No | Medium | 4, 5 |
 | ✅ 4 · RLS + indexes | No | Low–Med | — |
 | ✅ 5 · Context + switcher | **Yes** | Medium | 6 |
-| 6 · Invitations + team | Yes | Medium | 7 |
-| 7 · Areas + referrals | Yes | Low | — |
-| 8 · Onboarding + billing | Yes | Low | — |
+| ✅ 6 · Invitations + team | Yes | Medium | 7 |
+| ✅ 7 · Areas + referrals | Yes | Low | — |
+| ✅ 8 · Onboarding + billing | Yes | Low | — |
 
 ---
 
@@ -451,24 +537,22 @@ different roles behaves correctly in both.
 - ~~`ClinicalSession` rename~~ — kept. `SessionKind.DIRECT` rows are not
   appointments, so `Appointment` would have been a false name for half the table.
 
-**Known gap, deferred to Phase 8:**
-- An account with no membership currently gets a 403 from write routes and a
-  redirect to sign-in from pages. That is the honest state today, but a fresh
-  signup lands there. Practice onboarding is what fixes it — until then, new
-  accounts need a membership created by the seed or by hand.
+**Resolved in Phase 8:**
+- ~~No-membership signup~~ — `/no-practice` → `/onboarding` or accept invite.
+- ~~Self-serve vs sales-verified~~ — self-serve create → `PENDING_VERIFICATION`;
+  activate when registration number + contact email present. A human review
+  queue can replace activation later without changing the status field.
+- ~~Billing seat definition~~ — seats = ACTIVE memberships (a clinician in three
+  practices costs three seats). Checkout not wired yet.
 
 **Resolved:**
 - ~~Practice slug in the URL path~~ — decided and shipped in Phase 5 as
   `/p/<slug>/…`.
 
-**Not blocking, decide by Phase 7:**
-- Default patient access ladder (recommended: Open).
-- Whether Areas are hidden for single-clinician practices.
-
-**Not blocking, decide by Phase 8:**
-- Self-serve vs sales-verified practice creation.
-- Billing: seats = memberships, so a clinician in three practices costs three
-  seats. Commercial call.
+**Resolved in Phase 7:**
+- ~~Default patient access ladder~~ — **Open**.
+- ~~Hide Areas for solo practices~~ — shown whenever the actor can `manageAreas`;
+  empty state explains what they are. No special hide.
 
 ---
 

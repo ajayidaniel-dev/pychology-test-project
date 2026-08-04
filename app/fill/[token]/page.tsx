@@ -1,6 +1,7 @@
 import { unscopedDb as prisma } from "@/lib/db"
 import { isTokenExpired } from "@/lib/token"
 import { scaleNameToEnum } from "@/lib/patient-summary"
+import { brandingTaglineFromSettings } from "@/lib/practice-slug"
 import { FillFlow } from "@/components/questionnaire/fill-flow"
 import type { PendingQuestionnaire } from "@/components/questionnaire/fill-flow"
 import { FillShell } from "@/components/questionnaire/fill-shell"
@@ -30,6 +31,7 @@ export default async function FillPage({
       },
       patient: { select: { fullName: true, email: true } },
       psychologist: { select: { name: true } },
+      practice: { select: { name: true, settings: true } },
     },
   })
 
@@ -49,6 +51,8 @@ export default async function FillPage({
   }
 
   const clinicianName = clinicalSession.psychologist.name ?? null
+  const practiceName = clinicalSession.practice.name
+  const tagline = brandingTaglineFromSettings(clinicalSession.practice.settings)
   const patientHasDetails = Boolean(
     clinicalSession.patient.fullName && clinicalSession.patient.email,
   )
@@ -64,11 +68,16 @@ export default async function FillPage({
   )
 
   return (
-    <FillShell clinicianName={clinicianName}>
+    <FillShell
+      practiceName={practiceName}
+      tagline={tagline}
+      clinicianName={clinicianName}
+    >
       <FillFlow
         token={params.token}
         sessionTitle={clinicalSession.title}
         questionnaires={questionnaires}
+        practiceName={practiceName}
         clinicianName={clinicianName}
         collectDetails={clinicalSession.collectDetails && !patientHasDetails}
       />

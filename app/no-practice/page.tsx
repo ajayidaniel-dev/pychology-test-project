@@ -1,27 +1,28 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Building2 } from "lucide-react"
 import { getUserContext, listPracticeOptions } from "@/lib/session-context"
+import { listPendingInvitationsForEmail } from "@/lib/invitations"
+import { ROLE_LABELS } from "@/lib/roles"
 import { AuthLayout } from "@/components/layout/auth-layout"
+import { Button } from "@/components/ui/button"
 
 export const metadata: Metadata = { title: "No practice yet" }
 
 /**
  * Where an account with no practice membership lands.
  *
- * A real state until practice onboarding ships: an account can exist before it
- * belongs anywhere. Every clinical screen needs a practice to scope to, so
- * rather than render an empty dashboard that quietly means nothing, say plainly
- * what is missing and who can fix it.
+ * Two exits: accept an invitation, or create a practice (Phase 8 onboarding).
  */
 export default async function NoPracticePage() {
   const user = await getUserContext()
   if (!user) redirect("/auth/signin")
 
-  // Guard against landing here with a practice — an invitation accepted in
-  // another tab, say.
   const options = await listPracticeOptions(user.userId)
   if (options.length > 0) redirect(`/p/${options[0].slug}/dashboard`)
+
+  const invites = await listPendingInvitationsForEmail(user.email)
 
   return (
     <AuthLayout>
@@ -34,15 +35,44 @@ export default async function NoPracticePage() {
             You’re not in a practice yet
           </h1>
           <p className="text-sm text-muted-foreground">
-            APAS organises patients, assessments and notes by practice, so your
-            account needs to belong to one before there is anything to show.
+            APAS organises patients, assessments and notes by practice. Create
+            one for your clinic, or accept an invitation from a practice that
+            already uses APAS.
           </p>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Ask an owner or admin at your practice to invite{" "}
-          <span className="font-medium text-foreground">{user.email}</span>. The
-          invitation will appear here as soon as it is sent.
-        </p>
+
+        <Button asChild>
+          <Link href="/onboarding">Create a practice</Link>
+        </Button>
+
+        {invites.length > 0 ? (
+          <div className="flex w-full max-w-sm flex-col gap-3 text-left">
+            <p className="text-sm font-medium text-foreground">
+              Pending invitations
+            </p>
+            {invites.map((inv) => (
+              <div
+                key={inv.id}
+                className="flex flex-col gap-2 rounded-lg border p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">{inv.practice.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    as {ROLE_LABELS[inv.role]}
+                  </p>
+                </div>
+                <Button asChild size="sm" className="self-start" variant="outline">
+                  <Link href={`/invitations/${inv.token}`}>Review invitation</Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Expecting an invite? Ask an owner or admin to invite{" "}
+            <span className="font-medium text-foreground">{user.email}</span>.
+          </p>
+        )}
       </div>
     </AuthLayout>
   )

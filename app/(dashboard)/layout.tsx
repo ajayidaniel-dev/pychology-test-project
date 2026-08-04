@@ -25,19 +25,19 @@ export default async function DashboardLayout({
     if (!user) redirect("/auth/signin")
 
     const options = await listPracticeOptions(user.userId)
-    // No membership at all is a real state until practice onboarding ships
-    // (Phase 8) — a fresh signup lands here.
+    // No membership → create a practice or accept an invite.
     if (options.length === 0) redirect("/no-practice")
     redirect(`/p/${options[0].slug}/dashboard`)
   }
 
   const db = scopedDb(ctx)
 
-  const [counts, options] = await Promise.all([
+  const [counts, options, areaCount] = await Promise.all([
     // Resolved server-side so badges are correct on first paint rather than
     // popping in after hydration.
     getNavCounts(db, ctx.userId),
     listPracticeOptions(ctx.userId),
+    db.area.count(),
   ])
 
   return (
@@ -47,7 +47,10 @@ export default async function DashboardLayout({
         slug: ctx.practiceSlug,
         name: ctx.practiceName,
         practiceId: ctx.practiceId,
+        role: ctx.role,
+        status: ctx.practiceStatus,
         options,
+        hasAreas: areaCount > 0,
       }}
     >
       {children}

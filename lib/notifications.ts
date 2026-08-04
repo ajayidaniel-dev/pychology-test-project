@@ -17,7 +17,8 @@ const TYPE_PRIORITY: Record<NotificationType, number> = {
   QUESTIONNAIRE_COMPLETED: 4,
   LINK_EXPIRING_SOON: 5,
   LINK_EXPIRED: 6,
-  LOGIN: 7,
+  PRACTICE_INVITATION: 7,
+  LOGIN: 8,
 }
 
 export interface CreateNotificationInput {

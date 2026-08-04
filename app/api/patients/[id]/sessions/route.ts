@@ -4,6 +4,7 @@ import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
 import { fillUrlFor } from '@/lib/request-origin'
+import { findAccessiblePatient } from '@/lib/patient-access'
 
 const CreateSessionSchema = z.object({
   title: z.string().trim().min(1).max(120),
@@ -17,8 +18,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!ctx) return practiceContextFailure()
   const db = scopedDb(ctx)
 
-  const patient = await db.patient.findFirst({
-    where: { id: params.id, psychologistId: ctx.userId },
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -57,8 +58,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const kind =
     kindParam === 'APPOINTMENT' || kindParam === 'DIRECT' ? kindParam : undefined
 
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
+  })
+  if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   const sessions = await db.clinicalSession.findMany({
-    where: { patientId: params.id, psychologistId: ctx.userId, kind },
+    where: { patientId: params.id, kind },
     include: {
       questionnaires: {
         include: { response: true, scale: { select: { id: true, name: true } } },

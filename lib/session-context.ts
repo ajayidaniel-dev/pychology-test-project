@@ -11,7 +11,7 @@ import { getServerSession } from 'next-auth'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { NextResponse } from 'next/server'
-import type { MembershipRole } from '@prisma/client'
+import type { MembershipRole, PracticeStatus } from '@prisma/client'
 import {
   PRACTICE_COOKIE,
   PRACTICE_SLUG_HEADER,
@@ -42,6 +42,7 @@ export type PracticeContext = UserContext & {
   practiceId: string
   practiceSlug: string
   practiceName: string
+  practiceStatus: PracticeStatus
   membershipId: string
   role: MembershipRole
 }
@@ -108,7 +109,7 @@ export async function getPracticeContext(): Promise<PracticeContext | null> {
     id: true,
     practiceId: true,
     role: true,
-    practice: { select: { slug: true, name: true } },
+    practice: { select: { slug: true, name: true, status: true } },
   }
   const base = { userId: context.userId, status: 'ACTIVE' as const }
 
@@ -141,6 +142,7 @@ export async function getPracticeContext(): Promise<PracticeContext | null> {
     practiceId: membership.practiceId,
     practiceSlug: membership.practice.slug,
     practiceName: membership.practice.name,
+    practiceStatus: membership.practice.status,
     membershipId: membership.id,
     role: membership.role,
   }

@@ -22,11 +22,23 @@ describe("practice paths", () => {
     })
 
     it("leaves account-level paths alone", () => {
-      // /settings belongs to the human, not a practice. Prefixing it would
-      // produce a route that does not exist.
-      expect(practicePath("renaissance", "/settings")).toBe("/settings")
+      // /account belongs to the human, not a practice.
+      expect(practicePath("renaissance", "/account")).toBe("/account")
       expect(practicePath("renaissance", "/auth/signin")).toBe("/auth/signin")
       expect(practicePath("renaissance", "/fill/abc")).toBe("/fill/abc")
+      expect(practicePath("renaissance", "/invitations/tok")).toBe(
+        "/invitations/tok",
+      )
+      expect(practicePath("renaissance", "/onboarding")).toBe("/onboarding")
+    })
+
+    it("prefixes practice settings and billing", () => {
+      expect(practicePath("renaissance", "/settings")).toBe(
+        "/p/renaissance/settings",
+      )
+      expect(practicePath("renaissance", "/billing")).toBe(
+        "/p/renaissance/billing",
+      )
     })
 
     it("encodes a slug that would otherwise break the path", () => {
@@ -40,10 +52,12 @@ describe("practice paths", () => {
 
   describe("isAccountPath", () => {
     it("matches a section and its children but not a lookalike prefix", () => {
-      expect(isAccountPath("/settings")).toBe(true)
-      expect(isAccountPath("/settings/notifications")).toBe(true)
+      expect(isAccountPath("/account")).toBe(true)
+      expect(isAccountPath("/account/security")).toBe(true)
+      // Practice settings are practice-scoped, not account-level.
+      expect(isAccountPath("/settings")).toBe(false)
       // Would be a false positive under a naive startsWith check.
-      expect(isAccountPath("/settings-for-practices")).toBe(false)
+      expect(isAccountPath("/account-for-practices")).toBe(false)
     })
   })
 
@@ -73,8 +87,13 @@ describe("practice paths", () => {
       expect(equivalentSectionPath("/p/a/batches/123")).toBe("/batches")
     })
 
+    it("keeps practice settings when switching practice", () => {
+      expect(equivalentSectionPath("/p/a/settings")).toBe("/settings")
+      expect(equivalentSectionPath("/p/a/billing")).toBe("/billing")
+    })
+
     it("falls back to the dashboard for anything unrecognised", () => {
-      expect(equivalentSectionPath("/p/a/settings")).toBe("/dashboard")
+      expect(equivalentSectionPath("/p/a/unknown-section")).toBe("/dashboard")
       expect(equivalentSectionPath("/")).toBe("/dashboard")
     })
   })

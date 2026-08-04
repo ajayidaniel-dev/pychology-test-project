@@ -28,6 +28,7 @@ interface FillFlowProps {
   token: string
   sessionTitle: string
   questionnaires: PendingQuestionnaire[]
+  practiceName: string | null
   clinicianName: string | null
   /** Effective value: link has collection enabled AND patient has no details yet. */
   collectDetails: boolean
@@ -47,6 +48,7 @@ export function FillFlow({
   token,
   sessionTitle,
   questionnaires,
+  practiceName,
   clinicianName,
   collectDetails,
 }: FillFlowProps) {
@@ -76,6 +78,7 @@ export function FillFlow({
 
         {step === "consent" && (
           <ConsentStep
+            practiceName={practiceName}
             clinicianName={clinicianName}
             scaleName={
               total === 1

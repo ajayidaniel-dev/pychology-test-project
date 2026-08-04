@@ -40,7 +40,7 @@ const UNSCOPED_ALLOWED = new Set([
   // Account-level settings: about the human, not any practice they work in.
   'app/api/settings/password/route.ts',
   'app/api/settings/profile/route.ts',
-  'app/(dashboard)/settings/page.tsx',
+  'app/(dashboard)/account/page.tsx',
   // Suicidal-ideation alerts from the user's other practices. The one
   // deliberate exception to scoping: a scoped client cannot see across the
   // boundary, which is exactly what this needs to do. Still confined to this

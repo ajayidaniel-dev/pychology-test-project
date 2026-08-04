@@ -15,7 +15,12 @@ const SECTIONS: { prefix: string; label: string }[] = [
   { prefix: "/patients", label: "Patients" },
   { prefix: "/batches", label: "Batches" },
   { prefix: "/scales", label: "Scales" },
-  { prefix: "/settings", label: "Settings" },
+  { prefix: "/team", label: "Team" },
+  { prefix: "/areas", label: "Areas" },
+  { prefix: "/referrals", label: "Referrals" },
+  { prefix: "/settings", label: "Practice settings" },
+  { prefix: "/billing", label: "Billing" },
+  { prefix: "/account", label: "Account" },
 ]
 
 interface Location {

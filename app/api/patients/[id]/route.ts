@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
 import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
+import { findAccessiblePatient } from '@/lib/patient-access'
+import { can } from '@/lib/roles'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
   const db = scopedDb(ctx)
 
-  const patient = await db.patient.findFirst({
-    where: { id: params.id, psychologistId: ctx.userId },
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
     include: {
       clinicalSessions: {
         include: {
@@ -19,6 +20,15 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           },
         },
         orderBy: { scheduledAt: 'asc' },
+      },
+      areas: {
+        select: { area: { select: { id: true, name: true, specialty: true } } },
+      },
+      careTeam: {
+        select: {
+          userId: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
       },
     },
   })
@@ -37,10 +47,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!ctx) return practiceContextFailure()
   const db = scopedDb(ctx)
 
-  const patient = await db.patient.findFirst({
-    where: { id: params.id, psychologistId: ctx.userId },
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (!can(ctx.role, 'managePatients')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await req.json()
   const parsed = UpdatePatientSchema.safeParse(body)
@@ -54,15 +68,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(updated)
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
   const db = scopedDb(ctx)
 
-  const patient = await db.patient.findFirst({
-    where: { id: params.id, psychologistId: ctx.userId },
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  if (!can(ctx.role, 'managePatients')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   await db.patient.delete({ where: { id: params.id } })
 

@@ -9,6 +9,9 @@ interface PatientRecordTabsProps {
   notes: React.ReactNode
   /** Number of completed assessments, shown on the tab. */
   assessmentCount: number
+  /** Clinical content — omitted entirely for roles that cannot see it. */
+  showScores?: boolean
+  showNotes?: boolean
 }
 
 /**
@@ -24,6 +27,9 @@ interface PatientRecordTabsProps {
  *
  * Slots are server-rendered and passed through as children, so tabbing costs no
  * extra fetch and the record still renders fully on the server.
+ *
+ * Notes and score-heavy overview content are filtered by role — never
+ * rendered-then-disabled.
  */
 export function PatientRecordTabs({
   overview,
@@ -31,11 +37,15 @@ export function PatientRecordTabs({
   details,
   notes,
   assessmentCount,
+  showScores = true,
+  showNotes = true,
 }: PatientRecordTabsProps) {
+  const defaultTab = showScores ? "overview" : "assessments"
+
   return (
-    <Tabs defaultValue="overview" className="gap-6">
+    <Tabs defaultValue={defaultTab} className="gap-6">
       <TabsList>
-        <TabsTrigger value="overview">Overview</TabsTrigger>
+        {showScores && <TabsTrigger value="overview">Overview</TabsTrigger>}
         <TabsTrigger value="assessments">
           Assessments
           {assessmentCount > 0 && (
@@ -45,21 +55,25 @@ export function PatientRecordTabs({
           )}
         </TabsTrigger>
         <TabsTrigger value="details">Details</TabsTrigger>
-        <TabsTrigger value="notes">Notes</TabsTrigger>
+        {showNotes && <TabsTrigger value="notes">Notes</TabsTrigger>}
       </TabsList>
 
-      <TabsContent value="overview" className="flex flex-col gap-6">
-        {overview}
-      </TabsContent>
+      {showScores && (
+        <TabsContent value="overview" className="flex flex-col gap-6">
+          {overview}
+        </TabsContent>
+      )}
       <TabsContent value="assessments" className="flex flex-col gap-6">
         {assessments}
       </TabsContent>
       <TabsContent value="details" className="flex flex-col gap-6">
         {details}
       </TabsContent>
-      <TabsContent value="notes" className="flex flex-col gap-6">
-        {notes}
-      </TabsContent>
+      {showNotes && (
+        <TabsContent value="notes" className="flex flex-col gap-6">
+          {notes}
+        </TabsContent>
+      )}
     </Tabs>
   )
 }

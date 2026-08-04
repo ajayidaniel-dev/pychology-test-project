@@ -3,6 +3,8 @@ import { notFound } from "next/navigation"
 import { Link2Off } from "lucide-react"
 import { getPracticeContext, requirePracticeContext } from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
+import { can } from "@/lib/roles"
+import { findAccessiblePatient } from "@/lib/patient-access"
 import { isTokenExpired } from "@/lib/token"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
@@ -23,11 +25,15 @@ export async function generateMetadata({
   if (!ctx) return { title: "Session" }
   const db = scopedDb(ctx)
 
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
+  })
+  if (!patient) return { title: "Session" }
+
   const clinicalSession = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: ctx.userId,
     },
     select: { title: true },
   })
@@ -43,11 +49,15 @@ export default async function SessionDetailPage({
   const ctx = await requirePracticeContext()
   const db = scopedDb(ctx)
 
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
+  })
+  if (!patient) notFound()
+
   const clinicalSession = await db.clinicalSession.findFirst({
     where: {
       id: params.sessionId,
       patientId: params.id,
-      psychologistId: ctx.userId,
     },
     include: {
       patient: { select: { anonymousId: true } },
@@ -130,13 +140,15 @@ export default async function SessionDetailPage({
         kind={clinicalSession.kind}
       />
 
-      <NotesSection
-        patientId={params.id}
-        defaultTarget={noteTarget}
-        targets={[noteTarget]}
-        title={isDirect ? "Notes" : "Session notes"}
-        emptyDescription={`Nothing recorded for this ${noun} yet.`}
-      />
+      {can(ctx.role, "viewNotes") && (
+        <NotesSection
+          patientId={params.id}
+          defaultTarget={noteTarget}
+          targets={[noteTarget]}
+          title={isDirect ? "Notes" : "Session notes"}
+          emptyDescription={`Nothing recorded for this ${noun} yet.`}
+        />
+      )}
     </div>
   )
 }

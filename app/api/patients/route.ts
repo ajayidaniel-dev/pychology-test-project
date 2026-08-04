@@ -7,14 +7,19 @@ import {
   PATIENT_QUESTIONNAIRES_INCLUDE,
   flattenQuestionnaires,
 } from '@/lib/patient-summary'
+import { patientVisibilityWhere } from '@/lib/patient-access'
+import { setPatientAreas } from '@/lib/areas'
+import { can } from '@/lib/roles'
+import { practiceNotActive } from '@/lib/practices'
 
 export async function GET() {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
   const db = scopedDb(ctx)
 
+  const visibility = await patientVisibilityWhere(db, ctx)
   const patients = await db.patient.findMany({
-    where: { psychologistId: ctx.userId },
+    where: visibility,
     include: PATIENT_QUESTIONNAIRES_INCLUDE,
     orderBy: { createdAt: 'desc' },
   })
@@ -29,11 +34,20 @@ export async function GET() {
 
 const CreatePatientSchema = z.object({
   displayName: z.string().min(1),
+  areaIds: z.array(z.string().min(1)).max(50).optional(),
 })
 
 export async function POST(req: NextRequest) {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
+
+  if (!can(ctx.role, 'managePatients')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const gated = practiceNotActive(ctx.practiceStatus)
+  if (gated) return gated
+
   const db = scopedDb(ctx)
 
   const body = await req.json()
@@ -60,6 +74,15 @@ export async function POST(req: NextRequest) {
       },
     })
   }, { isolationLevel: 'Serializable' })
+
+  if (parsed.data.areaIds && parsed.data.areaIds.length > 0) {
+    await setPatientAreas({
+      practiceId: ctx.practiceId,
+      actorId: ctx.userId,
+      patientId: patient.id,
+      areaIds: parsed.data.areaIds,
+    })
+  }
 
   return NextResponse.json(patient, { status: 201 })
 }

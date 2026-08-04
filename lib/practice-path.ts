@@ -33,7 +33,15 @@ export function practicePath(slug: string, path: string): string {
 }
 
 /** Paths that belong to the human rather than any practice, so never prefixed. */
-const ACCOUNT_PATHS = ['/settings', '/auth', '/legal', '/fill', '/no-practice']
+const ACCOUNT_PATHS = [
+  '/account',
+  '/auth',
+  '/legal',
+  '/fill',
+  '/no-practice',
+  '/invitations',
+  '/onboarding',
+]
 
 export function isAccountPath(path: string): boolean {
   return ACCOUNT_PATHS.some(
@@ -51,7 +59,17 @@ export function stripPracticePrefix(path: string): string {
 }
 
 /** Top-level sections inside a practice. */
-export const PRACTICE_SECTIONS = ['dashboard', 'patients', 'batches', 'scales']
+export const PRACTICE_SECTIONS = [
+  'dashboard',
+  'patients',
+  'batches',
+  'scales',
+  'team',
+  'areas',
+  'referrals',
+  'settings',
+  'billing',
+]
 
 /**
  * Where switching practice should land.

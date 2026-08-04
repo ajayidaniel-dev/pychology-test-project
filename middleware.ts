@@ -58,6 +58,9 @@ export default withAuth(
 export const config = {
   matcher: [
     "/p/:path*",
+    "/account",
+    "/account/:path*",
+    "/settings",
     "/settings/:path*",
     // Both resolve a practice and so require a session. Handling the
     // unauthenticated case here gives a clean 307; leaving it to the page
@@ -65,6 +68,7 @@ export const config = {
     // meta-refresh in the browser.
     "/practice-redirect",
     "/no-practice",
+    "/onboarding",
     // Kept so old links and bookmarks still authenticate before the
     // (dashboard) layout redirects them onto their practice.
     "/dashboard/:path*",

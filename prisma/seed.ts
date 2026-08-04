@@ -82,6 +82,7 @@ async function main() {
   }
 
   await seedPractice()
+  await seedSecondPractice()
 
   console.log('Done.')
 }
@@ -245,6 +246,99 @@ async function seedPractice() {
   })
 
   console.log(`\n  Sign in with any of the accounts above — password: ${SEED_PASSWORD}`)
+}
+
+/**
+ * A second practice where the Renaissance owner is only a Clinician.
+ *
+ * Phase 6 verification: the same human holds different roles in two practices
+ * and the switcher + role gates behave correctly in both.
+ */
+async function seedSecondPractice() {
+  console.log('\nSeeding second development practice...')
+
+  const passwordHash = await hashPassword(SEED_PASSWORD)
+
+  const practice = await prisma.practice.upsert({
+    where: { slug: 'harbor' },
+    update: {},
+    create: {
+      name: 'Harbor Clinical Centre',
+      slug: 'harbor',
+      status: 'ACTIVE',
+      registrationNumber: 'DEV-0001',
+      contactEmail: 'hello@harbor.test',
+      city: 'Abuja',
+      country: 'Nigeria',
+    },
+  })
+
+  const area = await prisma.area.upsert({
+    where: { practiceId_name: { practiceId: practice.id, name: 'Clinical' } },
+    update: {},
+    create: {
+      practiceId: practice.id,
+      name: 'Clinical',
+      specialty: 'CLINICAL',
+    },
+  })
+
+  const harborOwner = await prisma.user.upsert({
+    where: { email: 'harbor.owner@apas.test' },
+    update: {},
+    create: {
+      email: 'harbor.owner@apas.test',
+      name: 'Dr. Funke Balogun',
+      passwordHash,
+      emailVerified: new Date(),
+    },
+  })
+
+  const renaissanceOwner = await prisma.user.findUnique({
+    where: { email: 'owner@apas.test' },
+  })
+  if (!renaissanceOwner) {
+    console.log('  Skipping — Renaissance owner not found')
+    return
+  }
+
+  for (const def of [
+    { user: harborOwner, role: 'OWNER' as const },
+    { user: renaissanceOwner, role: 'CLINICIAN' as const },
+  ]) {
+    const membership = await prisma.membership.upsert({
+      where: {
+        userId_practiceId: {
+          userId: def.user.id,
+          practiceId: practice.id,
+        },
+      },
+      update: { role: def.role, status: 'ACTIVE' },
+      create: {
+        userId: def.user.id,
+        practiceId: practice.id,
+        role: def.role,
+        status: 'ACTIVE',
+      },
+    })
+
+    await prisma.membershipArea.upsert({
+      where: {
+        membershipId_areaId: {
+          membershipId: membership.id,
+          areaId: area.id,
+        },
+      },
+      update: {},
+      create: { membershipId: membership.id, areaId: area.id },
+    })
+
+    console.log(`  ${def.role.padEnd(11)} ${def.user.email}`)
+  }
+
+  console.log(
+    `  ${renaissanceOwner.email} is OWNER at renaissance and CLINICIAN at harbor`,
+  )
 }
 
 main()

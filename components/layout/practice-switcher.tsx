@@ -50,7 +50,7 @@ function initials(name: string) {
  * across two clinics must never be wrong about.
  */
 export function PracticeSwitcher() {
-  const { slug, name, options } = usePractice()
+  const { slug, name, options, switchingTo, beginPracticeSwitch } = usePractice()
   const { isMobile, setOpenMobile } = useSidebar()
   const router = useRouter()
   const pathname = usePathname()
@@ -61,13 +61,14 @@ export function PracticeSwitcher() {
   const canSwitch = options.length > 1
 
   function selectPractice(next: PracticeOption) {
-    if (next.slug === slug) return
+    if (next.slug === slug || switchingTo) return
 
     // Non-authoritative: a preference for account-level pages that carry no
     // slug. Access is always re-derived from membership server-side, so a
     // tampered cookie grants nothing.
     document.cookie = `${PRACTICE_COOKIE}=${encodeURIComponent(next.slug)}; path=/; max-age=31536000; samesite=lax`
 
+    beginPracticeSwitch(next)
     setOpenMobile(false)
     router.push(practicePath(next.slug, equivalentSectionPath(pathname)))
     router.refresh()
@@ -130,6 +131,7 @@ export function PracticeSwitcher() {
               <DropdownMenuItem
                 key={option.practiceId}
                 onSelect={() => selectPractice(option)}
+                disabled={Boolean(switchingTo)}
                 className="gap-2"
               >
                 <div className="flex aspect-square size-7 shrink-0 items-center justify-center rounded-md border text-xs font-semibold">

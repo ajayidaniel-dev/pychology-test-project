@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { AlertTriangle } from "lucide-react"
 import { requirePracticeContext } from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
+import { can } from "@/lib/roles"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { QuestionnaireDetailHeader } from "@/components/sessions/questionnaire-detail-header"
@@ -93,6 +94,9 @@ export default async function QuestionnaireDetailPage({
   const severity = toSeverityLevel(alerts.severity)
   const noteTarget = questionnaireTarget(questionnaire, questionnaire.session)
 
+  const showScores = can(ctx.role, "viewScores")
+  const showNotes = can(ctx.role, "viewNotes")
+
   return (
     <div className="flex flex-col gap-6">
       <QuestionnaireDetailHeader
@@ -103,10 +107,10 @@ export default async function QuestionnaireDetailPage({
         sessionTitle={questionnaire.session.title}
         scaleName={questionnaire.scale.name}
         completedAt={questionnaire.response.completedAt}
-        severity={severity}
+        severity={showScores ? severity : null}
       />
 
-      {alerts.suicidalIdeation && (
+      {showScores && alerts.suicidalIdeation && (
         <Alert variant="destructive" role="alert">
           <AlertTriangle />
           <AlertTitle>Suicidal ideation endorsed</AlertTitle>
@@ -117,28 +121,34 @@ export default async function QuestionnaireDetailPage({
         </Alert>
       )}
 
-      <ScoreSummaryCard
-        totalScore={questionnaire.response.totalScore}
-        severity={severity}
-        scaleName={questionnaire.scale.name}
-      />
+      {showScores && (
+        <>
+          <ScoreSummaryCard
+            totalScore={questionnaire.response.totalScore}
+            severity={severity}
+            scaleName={questionnaire.scale.name}
+          />
 
-      <ItemScoresSection items={itemRows} />
+          <ItemScoresSection items={itemRows} />
 
-      <NarrativePanel
-        sessionId={params.sessionId}
-        questionnaireId={questionnaire.id}
-        patientId={params.id}
-        initialReviewed={!!questionnaire.response.reviewedAt}
-      />
+          <NarrativePanel
+            sessionId={params.sessionId}
+            questionnaireId={questionnaire.id}
+            patientId={params.id}
+            initialReviewed={!!questionnaire.response.reviewedAt}
+          />
+        </>
+      )}
 
-      <NotesSection
-        patientId={params.id}
-        defaultTarget={noteTarget}
-        targets={[noteTarget]}
-        title="Questionnaire notes"
-        emptyDescription="Nothing recorded against this questionnaire yet."
-      />
+      {showNotes && (
+        <NotesSection
+          patientId={params.id}
+          defaultTarget={noteTarget}
+          targets={[noteTarget]}
+          title="Questionnaire notes"
+          emptyDescription="Nothing recorded against this questionnaire yet."
+        />
+      )}
     </div>
   )
 }

@@ -5,6 +5,7 @@ export const metadata: Metadata = {
 }
 import { requirePracticeContext } from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
+import { patientVisibilityWhere } from "@/lib/patient-access"
 import { PageHeader } from "@/components/layout/page-header"
 import { Button } from "@/components/ui/button"
 import { NewPatientDialog } from "@/components/patients/new-patient-dialog"
@@ -19,8 +20,9 @@ export default async function PatientsPage() {
   const ctx = await requirePracticeContext()
   const db = scopedDb(ctx)
 
+  const visibility = await patientVisibilityWhere(db, ctx)
   const patients = await db.patient.findMany({
-    where: { psychologistId: ctx.userId },
+    where: visibility,
     include: PATIENT_QUESTIONNAIRES_INCLUDE,
     orderBy: { createdAt: "desc" },
   })

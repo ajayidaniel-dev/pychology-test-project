@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
 import { scopedDb } from '@/lib/db'
+import { forbiddenUnless } from '@/lib/roles-http'
+import { findAccessiblePatient } from '@/lib/patient-access'
 import { z } from 'zod'
 
 const CreateNoteSchema = z.object({
@@ -20,6 +22,8 @@ const noteInclude = {
 export async function POST(req: NextRequest) {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
+  const denied = forbiddenUnless(ctx.role, 'writeNotes')
+  if (denied) return denied
   const db = scopedDb(ctx)
 
   const parsed = CreateNoteSchema.safeParse(await req.json())
@@ -28,8 +32,7 @@ export async function POST(req: NextRequest) {
   const { patientId, body, questionnaireId } = parsed.data
   let sessionId = parsed.data.sessionId ?? null
 
-  const patient = await db.patient.findFirst({
-    where: { id: patientId, psychologistId: ctx.userId },
+  const patient = await findAccessiblePatient(db, ctx, patientId, {
     select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -73,6 +76,8 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
+  const denied = forbiddenUnless(ctx.role, 'viewNotes')
+  if (denied) return denied
   const db = scopedDb(ctx)
 
   const patientId = req.nextUrl.searchParams.get('patientId')
@@ -84,10 +89,14 @@ export async function GET(req: NextRequest) {
   // Filters are exact, not cascading: asking for a session's notes returns the
   // ones filed on the session itself, not those on its questionnaires. With no
   // filter you get the patient's whole stream.
+  const accessible = await findAccessiblePatient(db, ctx, patientId, {
+    select: { id: true },
+  })
+  if (!accessible) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   const notes = await db.note.findMany({
     where: {
       patientId,
-      patient: { psychologistId: ctx.userId },
       ...(questionnaireId
         ? { questionnaireId }
         : sessionId

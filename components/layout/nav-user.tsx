@@ -94,9 +94,9 @@ export function NavUser() {
 
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/settings" onClick={() => setOpenMobile(false)}>
+                <Link href="/account" onClick={() => setOpenMobile(false)}>
                   <Settings />
-                  Settings
+                  Account
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>

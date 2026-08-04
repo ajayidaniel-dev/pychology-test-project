@@ -19,13 +19,15 @@ import {
   updateNotificationPreferences,
 } from "@/lib/notification-preferences"
 
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+const findMany = prisma.notificationPreference.findMany as jest.Mock
+const findUnique = prisma.notificationPreference.findUnique as jest.Mock
+const upsert = prisma.notificationPreference.upsert as jest.Mock
 
 describe("notification preferences", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockPrisma.notificationPreference.findMany.mockResolvedValue([])
-    mockPrisma.notificationPreference.findUnique.mockResolvedValue(null)
+    findMany.mockResolvedValue([])
+    findUnique.mockResolvedValue(null)
   })
 
   it("defaults all notification types to enabled", async () => {
@@ -35,7 +37,7 @@ describe("notification preferences", () => {
   })
 
   it("returns false when a preference is disabled", async () => {
-    mockPrisma.notificationPreference.findUnique.mockResolvedValue({
+    findUnique.mockResolvedValue({
       userId: "user-1",
       type: NotificationType.LOGIN,
       enabled: false,
@@ -47,12 +49,12 @@ describe("notification preferences", () => {
   })
 
   it("updates preferences", async () => {
-    mockPrisma.notificationPreference.upsert.mockResolvedValue({
+    upsert.mockResolvedValue({
       userId: "user-1",
       type: NotificationType.LOGIN,
       enabled: false,
     })
-    mockPrisma.notificationPreference.findMany.mockResolvedValue([
+    findMany.mockResolvedValue([
       {
         userId: "user-1",
         type: NotificationType.LOGIN,
@@ -64,7 +66,7 @@ describe("notification preferences", () => {
       { type: NotificationType.LOGIN, enabled: false },
     ])
 
-    expect(mockPrisma.notificationPreference.upsert).toHaveBeenCalled()
+    expect(upsert).toHaveBeenCalled()
     expect(prefs.find((item) => item.type === NotificationType.LOGIN)?.enabled).toBe(
       false,
     )

@@ -136,9 +136,12 @@ export function PasswordSettingsForm() {
                   <FormControl>
                     <PasswordInput
                       autoComplete="new-password"
-                      onFocus={() => setNewPasswordFocused(true)}
-                      onBlur={() => setNewPasswordFocused(false)}
                       {...field}
+                      onFocus={() => setNewPasswordFocused(true)}
+                      onBlur={() => {
+                        field.onBlur()
+                        setNewPasswordFocused(false)
+                      }}
                     />
                   </FormControl>
                   <PasswordStrength

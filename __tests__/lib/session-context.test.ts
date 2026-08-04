@@ -141,7 +141,11 @@ describe("session context", () => {
         id: "m1",
         practiceId: "p1",
         role: "CLINICIAN",
-        practice: { slug: "renaissance", name: "Renaissance" },
+        practice: {
+          slug: "renaissance",
+          name: "Renaissance",
+          status: "ACTIVE",
+        },
       })
 
       await expect(getPracticeContext()).resolves.toEqual({
@@ -151,6 +155,7 @@ describe("session context", () => {
         practiceId: "p1",
         practiceSlug: "renaissance",
         practiceName: "Renaissance",
+        practiceStatus: "ACTIVE",
         membershipId: "m1",
         role: "CLINICIAN",
       })
@@ -176,7 +181,7 @@ describe("session context", () => {
         id: "m2",
         practiceId: "p2",
         role: "OWNER",
-        practice: { slug: "lekki", name: "Lekki" },
+        practice: { slug: "lekki", name: "Lekki", status: "ACTIVE" },
       })
 
       await expect(getPracticeContext()).resolves.toMatchObject({

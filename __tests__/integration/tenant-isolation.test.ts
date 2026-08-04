@@ -131,6 +131,9 @@ describeDb("cross-tenant isolation", () => {
       email: clinician.email,
       name: clinician.name,
       practiceId: practiceA.id,
+      practiceSlug: practiceA.slug,
+      practiceName: practiceA.name,
+      practiceStatus: practiceA.status,
       membershipId: membershipA.id,
       role: "CLINICIAN",
     }

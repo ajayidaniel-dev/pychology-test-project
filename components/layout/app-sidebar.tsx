@@ -4,14 +4,21 @@ import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  ArrowRightLeft,
   BookOpen,
+  CreditCard,
   Layers,
   LayoutDashboard,
+  MapPinned,
   Search,
   Settings,
+  UserRound,
   Users,
+  UsersRound,
   X,
 } from "lucide-react"
+import type { MembershipRole } from "@prisma/client"
+import { can, type Capability } from "@/lib/roles"
 import { NavUser } from "@/components/layout/nav-user"
 import { SidebarCollapseTrigger } from "@/components/layout/sidebar-collapse-trigger"
 import { useCommandPalette } from "@/components/layout/command-palette"
@@ -50,6 +57,10 @@ interface NavItem {
    * colours on anything else, not about avoiding them where risk is real.
    */
   badgeTone?: "neutral" | "critical"
+  /** When set, the item is omitted entirely for roles that lack the capability. */
+  requires?: Capability
+  /** Hide until the practice has at least one area (Referrals). */
+  requiresAreas?: boolean
 }
 
 /**
@@ -57,8 +68,8 @@ interface NavItem {
  *
  * Settings previously sat as a flat peer of Patients and Scales, which read as
  * though configuring your account were a clinical destination. The groups split
- * the three registers apart: where you work, what you administer, and who you
- * are.
+ * the registers apart: where you work, how the practice is organised, what you
+ * administer, and who you are.
  */
 const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   {
@@ -79,6 +90,44 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
         badge: "pendingQuestionnaires",
       },
       { href: "/batches", label: "Batches", icon: Layers },
+      {
+        href: "/referrals",
+        label: "Referrals",
+        icon: ArrowRightLeft,
+        requires: "manageReferrals",
+        requiresAreas: true,
+      },
+    ],
+  },
+  {
+    label: "Practice",
+    items: [
+      {
+        href: "/team",
+        label: "Team",
+        icon: UsersRound,
+        requires: "manageTeam",
+      },
+      {
+        href: "/areas",
+        label: "Areas",
+        icon: MapPinned,
+        requires: "manageAreas",
+      },
+      {
+        href: "/settings",
+        label: "Settings",
+        icon: Settings,
+        exact: true,
+        requires: "managePracticeSettings",
+      },
+      {
+        href: "/billing",
+        label: "Billing",
+        icon: CreditCard,
+        exact: true,
+        requires: "manageBilling",
+      },
     ],
   },
   {
@@ -87,11 +136,22 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Account",
-    items: [{ href: "/settings", label: "Settings", icon: Settings, exact: true }],
+    items: [
+      { href: "/account", label: "Account", icon: UserRound, exact: true },
+    ],
   },
 ]
 
-export function AppSidebar({ counts }: { counts: NavCounts }) {
+export function AppSidebar({
+  counts,
+  role,
+  hasAreas = false,
+}: {
+  counts: NavCounts
+  role: MembershipRole
+  /** Referrals nav only appears once areas exist. */
+  hasAreas?: boolean
+}) {
   const pathname = usePathname()
   const { isMobile, setOpenMobile } = useSidebar()
   const { setOpen: setPaletteOpen } = useCommandPalette()
@@ -183,7 +243,15 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
       </SidebarHeader>
 
       <SidebarContent>
-        {NAV_GROUPS.map((group) => (
+        {NAV_GROUPS.map((group) => {
+          const items = group.items.filter(
+            (item) =>
+              (!item.requires || can(role, item.requires)) &&
+              (!item.requiresAreas || hasAreas),
+          )
+          if (items.length === 0) return null
+
+          return (
           <SidebarGroup
             key={group.label}
             className="group-data-[collapsible=icon]:px-1.5"
@@ -191,7 +259,7 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map(
+                {items.map(
                   ({ href, label, icon: Icon, exact, badge, badgeTone }) => {
                     const relative = stripPracticePrefix(pathname)
                     const active = exact
@@ -232,7 +300,8 @@ export function AppSidebar({ counts }: { counts: NavCounts }) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        ))}
+          )
+        })}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">

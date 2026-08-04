@@ -55,7 +55,9 @@ const ROUTES = [
   { href: "/patients", label: "Patients", icon: Users },
   { href: "/batches", label: "Batches", icon: Layers },
   { href: "/scales", label: "Scales", icon: BookOpen },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Practice settings", icon: Settings },
+  { href: "/account", label: "Account", icon: Settings },
+  { href: "/billing", label: "Billing", icon: Settings },
 ] as const
 
 const ACTIONS = [
@@ -148,8 +150,8 @@ function CommandPalette() {
   const practiceHref = usePracticeHref()
 
   // Every palette destination funnels through here, so the practice prefix is
-  // applied once rather than at each of the nine call sites. Account paths
-  // (/settings) pass through untouched.
+  // applied once rather than at each call site. Account paths (/account)
+  // pass through untouched.
   const go = useCallback(
     (href: string) => {
       setOpen(false)

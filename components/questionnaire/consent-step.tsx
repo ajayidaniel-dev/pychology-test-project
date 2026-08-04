@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card"
 
 interface ConsentStepProps {
+  practiceName: string | null
   clinicianName: string | null
   scaleName: string
   collectDetails: boolean
@@ -18,11 +19,13 @@ interface ConsentStepProps {
 }
 
 export function ConsentStep({
+  practiceName,
   clinicianName,
   scaleName,
   collectDetails,
   onConsent,
 }: ConsentStepProps) {
+  const practice = practiceName ?? "your clinic"
   const clinician = clinicianName ?? "your clinician"
 
   return (
@@ -30,8 +33,8 @@ export function ConsentStep({
       <CardHeader>
         <CardTitle className="text-lg leading-snug">
           {clinicianName
-            ? `${clinicianName} has asked you to complete the ${scaleName}`
-            : `You've been asked to complete the ${scaleName}`}
+            ? `${clinicianName} at ${practice} has asked you to complete the ${scaleName}`
+            : `${practice} has asked you to complete the ${scaleName}`}
         </CardTitle>
         <CardDescription>
           Before you begin, here is exactly what happens with what you share.
@@ -50,15 +53,17 @@ export function ConsentStep({
               {collectDetails
                 ? ", and the personal details you provide in the next steps,"
                 : ""}{" "}
-              are visible only to {clinician}. Nobody else.
+              are held by {practice} and visible to {clinician} and other staff
+              at that practice who need them for your care. APAS does not use
+              them for its own purposes.
             </span>
           </li>
           <li className="flex gap-3">
             <Lock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
             <span>
-              <span className="font-medium">How APAS handles them.</span> APAS,
-              the platform {clinician} uses, scores your responses and stores
-              them securely
+              <span className="font-medium">How APAS fits in.</span> APAS is
+              the platform {practice} uses. It scores your responses and stores
+              them securely on the practice&apos;s behalf
               {collectDetails
                 ? " — identity details are stored only because you agree to it here"
                 : " under an anonymous identifier"}
@@ -97,11 +102,11 @@ export function ConsentStep({
 
         <div className="space-y-3 border-t pt-4">
           <p className="text-xs text-muted-foreground">
-            By continuing you consent to APAS processing your responses
+            By continuing you consent to {practice} processing your responses
             {collectDetails ? " and personal details" : ""} as described above
-            and in the linked policies, and to sharing them with {clinician}.
-            If you don&apos;t wish to continue, simply close this page and
-            contact {clinician}.
+            and in the linked policies, using APAS as their platform. If you
+            don&apos;t wish to continue, close this page and contact{" "}
+            {clinician}.
           </p>
           <Button onClick={onConsent} className="min-h-11 w-full">
             I agree and consent

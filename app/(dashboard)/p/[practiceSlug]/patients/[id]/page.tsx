@@ -5,6 +5,11 @@ import { AlertTriangle, ClipboardList } from "lucide-react"
 import { formatDistanceToNowStrict } from "date-fns"
 import { getPracticeContext, requirePracticeContext } from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
+import { can } from "@/lib/roles"
+import {
+  findAccessiblePatient,
+  patientVisibilityWhere,
+} from "@/lib/patient-access"
 import { isTokenExpired } from "@/lib/token"
 import { NewSessionDialog } from "@/components/sessions/new-session-dialog"
 import { SendQuestionnaireDialog } from "@/components/sessions/send-questionnaire-dialog"
@@ -30,6 +35,7 @@ import type { PatientSessionRow } from "@/components/patients/patient-sessions-s
 import { PatientDirectSendsSection } from "@/components/patients/patient-direct-sends-section"
 import type { PatientDirectSendRow } from "@/components/patients/patient-direct-sends-section"
 import { NotesSection } from "@/components/notes/notes-section"
+import { PatientCarePanel } from "@/components/patients/patient-care-panel"
 import {
   PATIENT_TARGET,
   questionnaireTarget,
@@ -76,8 +82,7 @@ export async function generateMetadata({
   if (!ctx) return { title: "Patient" }
   const db = scopedDb(ctx)
 
-  const patient = await db.patient.findFirst({
-    where: { id: params.id, psychologistId: ctx.userId },
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
     select: { displayName: true, anonymousId: true },
   })
 
@@ -93,12 +98,36 @@ export default async function PatientProfilePage({
   const ctx = await requirePracticeContext()
   const db = scopedDb(ctx)
 
+  const visibility = await patientVisibilityWhere(db, ctx)
   const patient = await db.patient.findFirst({
-    where: { id: params.id, psychologistId: ctx.userId },
-    include: PATIENT_QUESTIONNAIRES_INCLUDE,
+    where: { id: params.id, AND: [visibility] },
+    include: {
+      ...PATIENT_QUESTIONNAIRES_INCLUDE,
+      areas: { select: { areaId: true } },
+      careTeam: {
+        select: {
+          userId: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+      },
+      psychologist: { select: { id: true, name: true, email: true } },
+    },
   })
 
   if (!patient) notFound()
+
+  const [practiceAreas, practiceMembers] = await Promise.all([
+    db.area.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.membership.findMany({
+      where: { status: "ACTIVE" },
+      select: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    }),
+  ])
 
   // Charts, alerts and the summary all reason about questionnaires in
   // completion order, so flatten them out of their sessions first.
@@ -256,6 +285,8 @@ export default async function PatientProfilePage({
 
       <PatientRecordTabs
         assessmentCount={completed.length}
+        showScores={can(ctx.role, "viewScores")}
+        showNotes={can(ctx.role, "viewNotes")}
         overview={
           <>
             {completed.length > 0 && (
@@ -308,16 +339,36 @@ export default async function PatientProfilePage({
           </>
         }
         details={
-          <PatientDetailsCard
-            fullName={patient.fullName}
-            email={patient.email}
-            phone={patient.phone}
-            dateOfBirth={patient.dateOfBirth}
-            detailsUpdatedAt={patient.detailsUpdatedAt}
-            consentAt={latestConsented?.consentAt ?? null}
-            consentPolicyVersion={latestConsented?.consentPolicyVersion ?? null}
-            intake={latestIntake}
-          />
+          <>
+            <PatientCarePanel
+              patientId={patient.id}
+              areas={practiceAreas}
+              selectedAreaIds={patient.areas.map((a) => a.areaId)}
+              careTeam={patient.careTeam}
+              clinicians={practiceMembers
+                .filter((m) => m.user.id !== patient.psychologistId)
+                .map((m) => ({
+                  id: m.user.id,
+                  label: m.user.name ?? m.user.email ?? "Unknown",
+                }))}
+              responsibleLabel={
+                patient.psychologist.name ??
+                patient.psychologist.email ??
+                "Unknown"
+              }
+              canEdit={can(ctx.role, "managePatients")}
+            />
+            <PatientDetailsCard
+              fullName={patient.fullName}
+              email={patient.email}
+              phone={patient.phone}
+              dateOfBirth={patient.dateOfBirth}
+              detailsUpdatedAt={patient.detailsUpdatedAt}
+              consentAt={latestConsented?.consentAt ?? null}
+              consentPolicyVersion={latestConsented?.consentPolicyVersion ?? null}
+              intake={latestIntake}
+            />
+          </>
         }
         notes={
           <NotesSection

@@ -2,10 +2,25 @@ import { Shield } from "lucide-react"
 
 interface FillShellProps {
   children: React.ReactNode
+  practiceName?: string | null
+  tagline?: string | null
   clinicianName?: string | null
 }
 
-export function FillShell({ children, clinicianName }: FillShellProps) {
+export function FillShell({
+  children,
+  practiceName,
+  tagline,
+  clinicianName,
+}: FillShellProps) {
+  const subtitle = practiceName
+    ? clinicianName
+      ? `${practiceName} · sent by ${clinicianName}`
+      : practiceName
+    : clinicianName
+      ? `Sent by ${clinicianName} · encrypted in transit`
+      : "Your responses are encrypted in transit"
+
   return (
     <div className="flex min-h-screen flex-col">
       {/*
@@ -20,17 +35,21 @@ export function FillShell({ children, clinicianName }: FillShellProps) {
             <Shield className="size-4 text-primary" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-semibold leading-tight">Secure Questionnaire</p>
+            <p className="text-sm font-semibold leading-tight">
+              {practiceName ?? "Secure Questionnaire"}
+            </p>
             <p className="truncate text-xs text-muted-foreground">
-              {clinicianName
-                ? `Sent by ${clinicianName} · encrypted in transit`
-                : "Your responses are encrypted in transit"}
+              {tagline?.trim() ? tagline : subtitle}
             </p>
           </div>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-lg flex-1 px-4 py-6">{children}</main>
+
+      <footer className="border-t border-border py-3 text-center text-xs text-muted-foreground">
+        Powered by APAS
+      </footer>
     </div>
   )
 }

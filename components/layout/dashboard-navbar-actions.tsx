@@ -61,9 +61,9 @@ export function DashboardNavbarActions() {
           className="w-full justify-start gap-2"
           asChild
         >
-          <Link href="/settings">
+          <Link href="/account">
             <Settings className="size-4" />
-            Settings
+            Account
           </Link>
         </Button>
         <Button

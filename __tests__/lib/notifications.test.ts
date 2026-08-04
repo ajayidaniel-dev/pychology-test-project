@@ -29,7 +29,11 @@ jest.mock("@/lib/prisma", () => ({
 
 import prisma from "@/lib/prisma"
 
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
+const notificationUpsert = prisma.notification.upsert as jest.Mock
+const preferenceFindUnique = prisma.notificationPreference
+  .findUnique as jest.Mock
+const questionnaireUpdateMany = prisma.questionnaire.updateMany as jest.Mock
+const clinicalSessionFindMany = prisma.clinicalSession.findMany as jest.Mock
 
 describe("buildQuestionnaireSubmitNotifications", () => {
   const baseCtx = {
@@ -74,8 +78,8 @@ describe("buildQuestionnaireSubmitNotifications", () => {
 describe("createNotification dedupe", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockPrisma.notificationPreference.findUnique.mockResolvedValue(null)
-    mockPrisma.notification.upsert.mockResolvedValue({
+    preferenceFindUnique.mockResolvedValue(null)
+    notificationUpsert.mockResolvedValue({
       id: "n1",
       userId: "user-1",
       type: NotificationType.LOGIN,
@@ -102,7 +106,7 @@ describe("createNotification dedupe", () => {
       body: "body",
     })
 
-    expect(mockPrisma.notification.upsert).toHaveBeenCalledWith(
+    expect(notificationUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           userId_dedupeKey: {
@@ -118,8 +122,8 @@ describe("createNotification dedupe", () => {
 describe("createLoginNotification", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockPrisma.notificationPreference.findUnique.mockResolvedValue(null)
-    mockPrisma.notification.upsert.mockResolvedValue({
+    preferenceFindUnique.mockResolvedValue(null)
+    notificationUpsert.mockResolvedValue({
       id: "n1",
       userId: "user-1",
       type: NotificationType.LOGIN,
@@ -140,7 +144,7 @@ describe("createLoginNotification", () => {
 
     await createLoginNotification("user-1")
 
-    expect(mockPrisma.notification.upsert).toHaveBeenCalledWith(
+    expect(notificationUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           userId_dedupeKey: {
@@ -159,14 +163,14 @@ describe("createLoginNotification", () => {
 describe("reconcileOperationalNotifications", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockPrisma.notificationPreference.findUnique.mockResolvedValue(null)
-    mockPrisma.notification.upsert.mockResolvedValue({} as never)
-    mockPrisma.questionnaire.updateMany.mockResolvedValue({} as never)
+    preferenceFindUnique.mockResolvedValue(null)
+    notificationUpsert.mockResolvedValue({})
+    questionnaireUpdateMany.mockResolvedValue({})
   })
 
   it("creates expiring and expired link notifications", async () => {
     const now = Date.now()
-    mockPrisma.clinicalSession.findMany.mockResolvedValue([
+    clinicalSessionFindMany.mockResolvedValue([
       {
         id: "sess-expired",
         patientId: "pat-1",
@@ -185,15 +189,15 @@ describe("reconcileOperationalNotifications", () => {
         patient: { anonymousId: "PT-002" },
         questionnaires: [{ scale: { name: "PHQ-9" } }],
       },
-    ] as never)
+    ])
 
     const { reconcileOperationalNotifications } = await import(
       "@/lib/notifications"
     )
 
-    await reconcileOperationalNotifications(mockPrisma, "user-1")
+    await reconcileOperationalNotifications(prisma, "user-1")
 
-    expect(mockPrisma.notification.upsert).toHaveBeenCalledWith(
+    expect(notificationUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
           type: NotificationType.LINK_EXPIRED,
@@ -204,12 +208,12 @@ describe("reconcileOperationalNotifications", () => {
 
     // Expiry now knocks out the session's outstanding questionnaires, since
     // the token that gated them lives on the session.
-    expect(mockPrisma.questionnaire.updateMany).toHaveBeenCalledWith({
+    expect(questionnaireUpdateMany).toHaveBeenCalledWith({
       where: { sessionId: "sess-expired", status: "PENDING" },
       data: { status: "EXPIRED" },
     })
 
-    expect(mockPrisma.notification.upsert).toHaveBeenCalledWith(
+    expect(notificationUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
           type: NotificationType.LINK_EXPIRING_SOON,

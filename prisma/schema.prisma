@@ -62,6 +62,11 @@ model User {
   memberships             Membership[]
   invitationsSent         PracticeInvitation[]
   auditEntries            AuditEntry[]
+  careTeamMemberships     CareTeamMember[]         @relation("CareTeamMembership")
+  careTeamAdditions       CareTeamMember[]         @relation("CareTeamAddedBy")
+  referralsCreated        Referral[]               @relation("ReferralCreatedBy")
+  referralsAccepted       Referral[]               @relation("ReferralAcceptedBy")
+  referralsTargeted       Referral[]               @relation("ReferralTarget")
 }
 
 /// A practice is the tenant: a clinic as a business, with its own licence,
@@ -90,8 +95,13 @@ model Practice {
   city               String?
   country            String?
 
-  /// Practice-level configuration — patient access ladder, branding, alert
-  /// routing. JSON so settings can be added without a migration.
+  /// How far a membership can see into the practice caseload. OPEN is right
+  /// for small clinics (most early customers). See design §6.
+  patientAccess PatientAccessMode @default(OPEN)
+
+  /// Practice-level configuration — branding, alert routing, and other knobs
+  /// that can grow without a migration. The access ladder is a first-class
+  /// column above, not buried here.
   settings Json?
 
   createdAt DateTime @default(now())
@@ -108,6 +118,8 @@ model Practice {
   questionnaires   Questionnaire[]
   notes            Note[]
   notifications    Notification[]
+  careTeamMembers  CareTeamMember[]
+  referrals        Referral[]
 
   @@index([status])
 }
@@ -128,9 +140,11 @@ model Area {
   description String?
   createdAt   DateTime   @default(now())
 
-  practice    Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
-  memberships MembershipArea[]
-  patients    PatientArea[]
+  practice           Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  memberships        MembershipArea[]
+  patients           PatientArea[]
+  referralsFrom      Referral[]       @relation("ReferralSourceArea")
+  referralsTo        Referral[]       @relation("ReferralTargetArea")
 
   @@unique([practiceId, name])
   @@index([practiceId])
@@ -209,6 +223,8 @@ model PracticeInvitation {
   practiceId  String
   email       String
   role        MembershipRole   @default(CLINICIAN)
+  /// Areas chosen at invite time; applied as MembershipArea rows on accept.
+  areaIds     String[]         @default([])
   token       String           @unique
   status      InvitationStatus @default(PENDING)
   invitedById String?
@@ -221,6 +237,69 @@ model PracticeInvitation {
 
   @@index([practiceId, status])
   @@index([email])
+}
+
+/// A named clinician on a patient's care team — intra-practice sharing.
+///
+/// Not a consent grant. Adding someone here (or adding a patient area) is how
+/// a patient is shared inside one legal custodian. See design §6.
+model CareTeamMember {
+  id         String   @id @default(cuid())
+  practiceId String
+  patientId  String
+  userId     String
+  addedById  String?
+  addedAt    DateTime @default(now())
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  user     User     @relation("CareTeamMembership", fields: [userId], references: [id], onDelete: Cascade)
+  addedBy  User?    @relation("CareTeamAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([patientId, userId])
+  @@index([practiceId, userId])
+  @@index([userId])
+}
+
+/// Internal referral between areas (or to a named clinician) inside one practice.
+///
+/// A workflow object, not a data-sharing grant. On acceptance the target area is
+/// added to the patient and the receiving clinician joins the care team.
+/// Cross-practice referral is deliberately out of scope — design the states so
+/// it can grow later. See docs/multi-tenancy-design.md §8.
+model Referral {
+  id           String           @id @default(cuid())
+  practiceId   String
+  patientId    String
+  status       ReferralStatus   @default(DRAFTED)
+  priority     ReferralPriority @default(ROUTINE)
+  reason       String
+  /// Returned to the referrer when the referral completes.
+  summary      String?
+  sourceAreaId String?
+  targetAreaId String?
+  /// Optional named receiving clinician. Null means "anyone in the target area".
+  targetUserId String?
+  createdById  String
+  acceptedById String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  sentAt       DateTime?
+  resolvedAt   DateTime?
+  completedAt  DateTime?
+
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  sourceArea Area?    @relation("ReferralSourceArea", fields: [sourceAreaId], references: [id], onDelete: SetNull)
+  targetArea Area?    @relation("ReferralTargetArea", fields: [targetAreaId], references: [id], onDelete: SetNull)
+  targetUser User?    @relation("ReferralTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  createdBy  User     @relation("ReferralCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  acceptedBy User?    @relation("ReferralAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([practiceId, status, createdAt])
+  @@index([practiceId, createdById])
+  @@index([practiceId, targetUserId])
+  @@index([patientId])
 }
 
 /// Who did what, to whom, in which practice. Append-only.
@@ -330,6 +409,8 @@ model Patient {
   notes               Note[]
   notifications       Notification[]
   areas               PatientArea[]
+  careTeam            CareTeamMember[]
+  referrals           Referral[]
   practice            Practice          @relation(fields: [practiceId], references: [id], onDelete: Cascade)
   psychologist        User              @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
@@ -494,6 +575,29 @@ enum PracticeStatus {
   SUSPENDED
 }
 
+/// How far a membership can see into the practice caseload.
+/// Stored in Practice.settings.patientAccess; default OPEN.
+enum PatientAccessMode {
+  OPEN
+  AREA_SCOPED
+  ASSIGNED_ONLY
+}
+
+enum ReferralStatus {
+  DRAFTED
+  SENT
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ReferralPriority {
+  ROUTINE
+  PRIORITY
+  URGENT
+}
+
 /// Branches of psychology an Area can map to. Deliberately an attribute of an
 /// area — never a tenant. OTHER covers free-text areas and anything this list
 /// does not anticipate.
@@ -575,6 +679,9 @@ enum NotificationType {
   LINK_EXPIRING_SOON
   LINK_EXPIRED
   LOGIN
+  /// Existing-user invite path: surfaces in the app they already use so they
+  /// never create a second account to join another practice.
+  PRACTICE_INVITATION
 }
 
 model Notification {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
 import { scopedDb } from '@/lib/db'
+import { forbiddenUnless } from '@/lib/roles-http'
 import { computeAlerts } from '@/lib/alert-rules'
 import { scaleNameToEnum } from '@/lib/patient-summary'
 import { buildItemLines, buildHistoryBlock, callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
@@ -105,6 +106,8 @@ Produce the structured clinical summary.`
 export async function POST(req: NextRequest) {
   const ctx = await getPracticeContext()
   if (!ctx) return practiceContextFailure()
+  const denied = forbiddenUnless(ctx.role, 'viewScores')
+  if (denied) return denied
   const db = scopedDb(ctx)
 
   const parsed = BodySchema.safeParse(await req.json())
