@@ -1,6 +1,6 @@
 # Tenancy Implementation Plan
 
-**Status:** phases 0–7 done · phase 2 dropped · RLS shipped dormant · drafted and last updated 2026-08-04
+**Status:** phases 0–8 done · phase 2 dropped · RLS shipped dormant · drafted and last updated 2026-08-04
 **Design:** [multi-tenancy-design.md](./multi-tenancy-design.md) · [information-architecture.md](./information-architecture.md)
 
 ---
@@ -470,16 +470,17 @@ and AREA_SCOPED visibility.
 ### Referrals
 
 `Referral` workflow: drafted → sent → accepted/declined → in progress →
-completed. Inbox/outbox at `/p/<slug>/referrals`. Nav appears only when the
-practice has at least one area. Accept adds the target area and puts the
-receiver on the care team.
+completed. Inbox / Outbox / History at `/p/<slug>/referrals`. History holds
+completed and declined items that left the inbox (with completion summary).
+Nav appears only when the practice has at least one area. Accept adds the
+target area and puts the receiver on the care team.
 
 **Verified:** unit tests for access ladder + roles; integration tests for
 referral accept/decline side effects.
 
 ---
 
-## Phase 8 — Onboarding and settings ✅
+## Phase 8 — Onboarding and settings ✅ done 2026-08-04
 
 ### Practice creation and verification
 

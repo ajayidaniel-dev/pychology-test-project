@@ -1,10 +1,10 @@
 import dynamic from "next/dynamic"
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, Lock } from "lucide-react"
 import { requirePracticeContext } from "@/lib/session-context"
 import { scopedDb } from "@/lib/db"
-import { can } from "@/lib/roles"
+import { can, ROLE_LABELS } from "@/lib/roles"
 import { computeAlerts } from "@/lib/alert-rules"
 import { scaleNameToEnum } from "@/lib/patient-summary"
 import { QuestionnaireDetailHeader } from "@/components/sessions/questionnaire-detail-header"
@@ -12,6 +12,7 @@ import { ScoreSummaryCard } from "@/components/sessions/score-summary-card"
 import { ItemScoresSection } from "@/components/sessions/item-scores-section"
 import type { ItemScoreRow } from "@/components/sessions/item-scores-section"
 import { NotesSection } from "@/components/notes/notes-section"
+import { EmptyState } from "@/components/layout/empty-state"
 import { questionnaireTarget } from "@/components/notes/note-target"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import type { SeverityLevel } from "@/components/ui/severity-badge"
@@ -108,7 +109,22 @@ export default async function QuestionnaireDetailPage({
         scaleName={questionnaire.scale.name}
         completedAt={questionnaire.response.completedAt}
         severity={showScores ? severity : null}
+        showReport={showScores}
       />
+
+      {/*
+        Everything below the header is clinical content, so a role holding
+        neither capability would otherwise land on a page that renders nothing
+        but a title — indistinguishable from a broken page. Name the boundary
+        instead of leaving a void.
+      */}
+      {!showScores && !showNotes && (
+        <EmptyState
+          icon={<Lock className="size-5" />}
+          title="Clinical results are restricted"
+          description={`Scores, item responses and notes are visible to clinicians, supervisors and owners. You are a ${ROLE_LABELS[ctx.role]} at this practice, so you can see that this questionnaire was completed but not its results. Ask an owner to change your role if you need access.`}
+        />
+      )}
 
       {showScores && alerts.suicidalIdeation && (
         <Alert variant="destructive" role="alert">

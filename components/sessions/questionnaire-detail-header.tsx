@@ -23,6 +23,9 @@ interface QuestionnaireDetailHeaderProps {
   scaleName: string
   completedAt: Date
   severity: SeverityLevel | null
+  /** The report is score content: offering the button to a role that cannot
+   *  read scores links straight into a 404. */
+  showReport: boolean
 }
 
 export function QuestionnaireDetailHeader({
@@ -34,6 +37,7 @@ export function QuestionnaireDetailHeader({
   scaleName,
   completedAt,
   severity,
+  showReport,
 }: QuestionnaireDetailHeaderProps) {
   const formattedDate = new Date(completedAt).toLocaleDateString()
   const sessionHref = practiceHref(`/patients/${patientId}/sessions/${sessionId}`)
@@ -86,12 +90,14 @@ export function QuestionnaireDetailHeader({
             Back to session
           </Link>
         </Button>
-        <Button variant="outline" size="sm" className="h-8 gap-1 px-2" asChild>
-          <Link href={`${sessionHref}/questionnaires/${questionnaireId}/report`}>
-            <FileText className="size-4" />
-            Report
-          </Link>
-        </Button>
+        {showReport && (
+          <Button variant="outline" size="sm" className="h-8 gap-1 px-2" asChild>
+            <Link href={`${sessionHref}/questionnaires/${questionnaireId}/report`}>
+              <FileText className="size-4" />
+              Report
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
   )
