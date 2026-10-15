@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -30,6 +32,8 @@ interface Props {
 }
 
 export function PatientActions({ patientId, currentDisplayName }: Props) {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [displayName, setDisplayName] = useState(currentDisplayName)
@@ -58,7 +62,7 @@ export function PatientActions({ patientId, currentDisplayName }: Props) {
     const res = await fetch(`/api/patients/${patientId}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Patient deleted")
-      router.push("/patients")
+      router.push(practiceHref("/patients"))
       router.refresh()
     } else {
       setDeleting(false)

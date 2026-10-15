@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -18,6 +20,8 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export function DeleteScaleButton({ scaleId }: { scaleId: string }) {
+  const practiceHref = usePracticeHref()
+
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -27,7 +31,7 @@ export function DeleteScaleButton({ scaleId }: { scaleId: string }) {
     const res = await fetch(`/api/scales/${scaleId}`, { method: "DELETE" })
     if (res.ok) {
       toast.success("Scale deleted")
-      router.push("/scales")
+      router.push(practiceHref("/scales"))
       router.refresh()
     } else {
       const data = await res.json().catch(() => ({}))

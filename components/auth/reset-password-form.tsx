@@ -9,8 +9,8 @@ import { z } from "zod"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PasswordInput } from "@/components/ui/password-input"
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import { FormErrorAlert } from "@/components/ui/form-error-alert"
+import { AuthCard } from "@/components/auth/auth-card"
 import { PasswordStrength } from "@/components/auth/password-strength"
 import {
   Form,
@@ -48,7 +48,7 @@ export function ResetPasswordForm() {
 
   const { isSubmitting } = form.formState
   const pending = isSubmitting || redirecting
-  const passwordValue = form.watch("password")
+  const passwordValue = form.watch("password") ?? ""
 
   async function onSubmit(data: FormData) {
     if (!token) return
@@ -71,90 +71,82 @@ export function ResetPasswordForm() {
     }
   }
 
+  // A reset page with no token is a dead end, not a form with an error on it.
+  if (!token) {
+    return (
+      <AuthCard
+        title="This link is incomplete"
+        description="Password reset links expire and can only be used once. Request a fresh one and open it directly from your email."
+      >
+        <Button className="w-full" asChild>
+          <Link href="/auth/forgot-password">Request a new link</Link>
+        </Button>
+      </AuthCard>
+    )
+  }
+
   return (
-    <Card className="w-full max-w-md border shadow-sm">
-      <CardHeader>
-        <h1 data-slot="card-title" className="text-2xl leading-none font-semibold">
-          Choose a new password
-        </h1>
-        <CardDescription>
-          It will replace your old password immediately.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {!token ? (
-            <>
-              <FormErrorAlert
-                title="Missing reset link"
-                message="This page needs a valid reset link. Request a new one and open the link from your email."
-              />
-              <Button variant="outline" className="w-full" asChild>
-                <Link href="/auth/forgot-password">Request a new link</Link>
-              </Button>
-            </>
-          ) : (
-            <>
-              {serverError && (
-                <div className="space-y-3">
-                  <FormErrorAlert title="Reset failed" message={serverError} />
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/auth/forgot-password">Request a new link</Link>
-                  </Button>
-                </div>
-              )}
+    <AuthCard
+      title="Choose a new password"
+      description="It replaces your old password immediately, on every device."
+      banner={
+        serverError ? (
+          <div className="flex flex-col items-start gap-3">
+            <FormErrorAlert title="Reset failed" message={serverError} />
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/auth/forgot-password">Request a new link</Link>
+            </Button>
+          </div>
+        ) : null
+      }
+      focusOnChange={serverError}
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>New password</FormLabel>
+                <FormControl>
+                  <PasswordInput autoComplete="new-password" autoFocus {...field} />
+                </FormControl>
+                <PasswordStrength
+                  password={passwordValue}
+                  show={passwordValue.length > 0}
+                />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>New password</FormLabel>
-                        <FormControl>
-                          <PasswordInput autoComplete="new-password" autoFocus {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+          <FormField
+            control={form.control}
+            name="confirm"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Confirm new password</FormLabel>
+                <FormControl>
+                  <PasswordInput autoComplete="new-password" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-                  <PasswordStrength
-                    password={passwordValue}
-                    show={passwordValue.length > 0}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="confirm"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Confirm new password</FormLabel>
-                        <FormControl>
-                          <PasswordInput autoComplete="new-password" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <Button type="submit" className="w-full" disabled={pending}>
-                    {pending ? (
-                      <>
-                        <Loader2 className="animate-spin" />
-                        Updating password…
-                      </>
-                    ) : (
-                      "Update password"
-                    )}
-                  </Button>
-                </form>
-              </Form>
-            </>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+          <Button type="submit" className="mt-1 w-full" disabled={pending}>
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" />
+                Updating password…
+              </>
+            ) : (
+              "Update password"
+            )}
+          </Button>
+        </form>
+      </Form>
+    </AuthCard>
   )
 }

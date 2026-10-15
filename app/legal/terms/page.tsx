@@ -6,15 +6,18 @@ export const metadata = {
 
 export default function TermsOfServicePage() {
   return (
-    <LegalArticle title="Terms of service" lastUpdated="July 16, 2026">
+    <LegalArticle title="Terms of service" lastUpdated="August 4, 2026">
       <h2>What APAS is — and is not</h2>
       <p>
-        APAS is decision-support software for licensed clinicians. It scores
-        standardized psychology questionnaires, tracks severity over time, and
-        raises threshold alerts. <strong>It is not a medical device, not a
-        diagnostic tool, and never a substitute for clinical judgment.</strong>{" "}
-        Every score and alert APAS produces is input to a clinician&apos;s own
-        assessment, not a conclusion.
+        APAS is decision-support software for practices and the licensed
+        clinicians who work in them. It scores standardized psychology
+        questionnaires, tracks severity over time, and raises threshold
+        alerts. <strong>It is not a medical device, not a diagnostic tool,
+        and never a substitute for clinical judgment.</strong> Every score and
+        alert APAS produces is input to a clinician&apos;s own assessment, not
+        a conclusion. The practice that holds the patient record is responsible
+        for clinical use of that data; APAS is the platform that stores and
+        scores it.
       </p>
       <p>
         <strong>APAS is not an emergency service.</strong> If you or someone
@@ -33,16 +36,21 @@ export default function TermsOfServicePage() {
         your practice.
       </p>
 
-      <h2>Your responsibilities as a clinician</h2>
+      <h2>Your responsibilities as a practice</h2>
       <ul>
+        <li>
+          The practice is the data controller for patient records created under
+          its membership. Owners and admins must keep registration and contact
+          details accurate and ensure only authorised staff have access.
+        </li>
         <li>
           Obtain any consent your jurisdiction requires before sending a
           patient an assessment link, and use the details-collection option
           only where you have a lawful basis to hold identifying information.
         </li>
         <li>
-          Keep your account credentials secure; you are responsible for
-          activity under your account.
+          Keep account credentials secure; you are responsible for activity
+          under your membership.
         </li>
         <li>
           Review alerts with your own judgment. Alert thresholds are aids, and

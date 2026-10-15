@@ -7,12 +7,16 @@ import { PatientSessionsTable } from "@/components/patients/patient-sessions-tab
 
 export interface PatientSessionRow {
   id: string
-  index: number
-  scaleName: string
+  title: string
+  reason: string | null
+  scheduledAt: Date
   status: string
-  score: number | null
-  severity: string | null
+  questionnaireCount: number
+  completedCount: number
+  /** Scale names attached to the session, for the secondary line. */
+  scaleNames: string[]
   token: string
+  linkExpired: boolean
 }
 
 interface PatientSessionsSectionProps {
@@ -35,7 +39,7 @@ export function PatientSessionsSection({
           <EmptyState
             plain
             title="No sessions yet"
-            description='Click "New Session" to create an assessment and send a questionnaire link.'
+            description='Click "New Session" to book an appointment. You can attach questionnaires to it afterwards.'
           />
         </CardContent>
       ) : (

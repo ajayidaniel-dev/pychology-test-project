@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 import { generateToken, tokenExpiresAt } from '@/lib/token'
+import { fillUrlFor } from '@/lib/request-origin'
+import { findAccessiblePatient } from '@/lib/patient-access'
 
 const CreateSessionSchema = z.object({
-  scaleId: z.string().min(1),
+  title: z.string().trim().min(1).max(120),
+  reason: z.string().trim().max(2000).optional(),
+  scheduledAt: z.coerce.date(),
   collectDetails: z.boolean().optional().default(false),
 })
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const patient = await prisma.patient.findFirst({
-    where: { id: params.id, psychologistId: session.user.id },
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
   })
   if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -23,44 +27,51 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const parsed = CreateSessionSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const scaleRecord = await prisma.scale.findFirst({
-    where: {
-      id: parsed.data.scaleId,
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
-    },
-  })
-  if (!scaleRecord) return NextResponse.json({ error: 'Scale not found' }, { status: 400 })
-
-  const token = generateToken()
-  const assessmentSession = await prisma.assessmentSession.create({
+  const clinicalSession = await db.clinicalSession.create({
     data: {
       patientId: params.id,
-      psychologistId: session.user.id,
-      scaleId: parsed.data.scaleId,
+      practiceId: ctx.practiceId,
+      psychologistId: ctx.userId,
+      title: parsed.data.title,
+      reason: parsed.data.reason || null,
+      scheduledAt: parsed.data.scheduledAt,
       collectDetails: parsed.data.collectDetails,
-      token,
+      token: generateToken(),
       tokenExpiresAt: tokenExpiresAt(),
     },
   })
 
-  // Prefer the host the request actually came in on; behind a proxy that is
-  // the forwarded host. NEXTAUTH_URL is only a last resort.
-  const proto = req.headers.get('x-forwarded-proto') ?? req.nextUrl.protocol.replace(':', '')
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
-  const origin = host ? `${proto}://${host}` : (process.env.NEXTAUTH_URL ?? req.nextUrl.origin)
-  const fillUrl = `${origin}/fill/${token}`
-
-  return NextResponse.json({ ...assessmentSession, fillUrl }, { status: 201 })
+  return NextResponse.json(
+    { ...clinicalSession, fillUrl: fillUrlFor(req, clinicalSession.token) },
+    { status: 201 },
+  )
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const sessions = await prisma.assessmentSession.findMany({
-    where: { patientId: params.id, psychologistId: session.user.id },
-    include: { response: true },
-    orderBy: { createdAt: 'asc' },
+  // Appointments and direct sends share a table but are separate lists in the
+  // UI, so callers say which they want. No `kind` means everything.
+  const kindParam = req.nextUrl.searchParams.get('kind')?.toUpperCase()
+  const kind =
+    kindParam === 'APPOINTMENT' || kindParam === 'DIRECT' ? kindParam : undefined
+
+  const patient = await findAccessiblePatient(db, ctx, params.id, {
+    select: { id: true },
+  })
+  if (!patient) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const sessions = await db.clinicalSession.findMany({
+    where: { patientId: params.id, kind },
+    include: {
+      questionnaires: {
+        include: { response: true, scale: { select: { id: true, name: true } } },
+        orderBy: { order: 'asc' },
+      },
+    },
+    orderBy: { scheduledAt: 'desc' },
   })
 
   return NextResponse.json(sessions)

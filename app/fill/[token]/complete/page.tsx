@@ -31,7 +31,7 @@ export default function CompletePage() {
           </div>
           <CardTitle>Thank you</CardTitle>
           <CardDescription>
-            Your questionnaire has been submitted successfully.
+            You&apos;ve finished everything your clinician sent.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

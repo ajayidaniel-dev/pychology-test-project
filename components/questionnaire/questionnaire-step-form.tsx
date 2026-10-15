@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -181,10 +180,20 @@ interface Props {
   scale: string
   scaleName: string
   token: string
+  questionnaireId: string
   description?: string | null
   dbItems?: DbItem[]
   /** Extra fields merged into the submit body (consent, details, intake). */
   extraPayload?: Record<string, unknown>
+  /**
+   * "Questionnaire 2 of 3" — only shown when the session holds more than one,
+   * so a single-questionnaire session stays as quiet as it was before.
+   */
+  sequenceLabel?: string | null
+  /** Drives the submit button copy: more to come, or the end of the session. */
+  isLastInSession?: boolean
+  /** Called after a successful submit so the session flow can advance. */
+  onSubmitted: () => void
 }
 
 /** Split scale description into summary + patient instructions for display. */
@@ -218,11 +227,14 @@ export function QuestionnaireStepForm({
   scale,
   scaleName,
   token,
+  questionnaireId,
   description,
   dbItems,
   extraPayload,
+  sequenceLabel,
+  isLastInSession = true,
+  onSubmitted,
 }: Props) {
-  const router = useRouter()
   const [currentStep, setCurrentStep] = useState(1)
   const [answers, setAnswers] = useState<Record<number, number | string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -288,11 +300,14 @@ export function QuestionnaireStepForm({
       }
     })
 
-    const res = await fetch(`/api/fill/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemScores, ...extraPayload }),
-    })
+    const res = await fetch(
+      `/api/fill/${token}/questionnaires/${questionnaireId}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemScores, ...extraPayload }),
+      },
+    )
 
     if (!res.ok) {
       if (res.status === 410) {
@@ -310,7 +325,7 @@ export function QuestionnaireStepForm({
       return
     }
 
-    router.push(`/fill/${token}/complete`)
+    onSubmitted()
   }
 
   if (items.length === 0) {
@@ -326,7 +341,12 @@ export function QuestionnaireStepForm({
   return (
     <div className="pb-28 md:pb-8">
       <div className="space-y-6">
-        <div>
+        <div className="space-y-1">
+          {sequenceLabel && (
+            <p className="text-xs font-medium text-muted-foreground">
+              {sequenceLabel}
+            </p>
+          )}
           <h1 className="text-lg font-semibold leading-snug">{title}</h1>
         </div>
 
@@ -408,7 +428,11 @@ export function QuestionnaireStepForm({
               disabled={!allAnswered || submitting}
               className="min-h-11 flex-[2]"
             >
-              {submitting ? "Submitting…" : "Submit responses"}
+              {submitting
+                ? "Submitting…"
+                : isLastInSession
+                  ? "Submit responses"
+                  : "Submit and continue"}
             </Button>
           ) : (
             <Button

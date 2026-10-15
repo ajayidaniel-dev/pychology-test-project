@@ -9,6 +9,7 @@ export const NOTIFICATION_TYPE_ORDER: NotificationType[] = [
   NotificationType.QUESTIONNAIRE_COMPLETED,
   NotificationType.LINK_EXPIRING_SOON,
   NotificationType.LINK_EXPIRED,
+  NotificationType.PRACTICE_INVITATION,
   NotificationType.LOGIN,
 ]
 
@@ -43,6 +44,10 @@ export const NOTIFICATION_TYPE_META: Record<
   LINK_EXPIRED: {
     label: "Link expired",
     description: "When a patient questionnaire link has expired without completion.",
+  },
+  PRACTICE_INVITATION: {
+    label: "Practice invitations",
+    description: "When another practice invites you to join their team.",
   },
   LOGIN: {
     label: "Sign-in activity",

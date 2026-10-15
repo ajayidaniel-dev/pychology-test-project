@@ -42,34 +42,315 @@ model VerificationToken {
 }
 
 model User {
-  id                      String              @id @default(cuid())
+  id                      String                   @id @default(cuid())
   name                    String?
-  email                   String?             @unique
+  email                   String?                  @unique
   emailVerified           DateTime?
   image                   String?
   passwordHash            String?
-  verificationToken       String?             @unique
+  verificationToken       String?                  @unique
   verificationTokenExpiry DateTime?
   accounts                Account[]
-  assessmentSessions      AssessmentSession[]
+  clinicalSessions        ClinicalSession[]
+  sessionBatches          SessionBatch[]
   patients                Patient[]
   scales                  Scale[]
   sessions                Session[]
+  notes                   Note[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  memberships             Membership[]
+  invitationsSent         PracticeInvitation[]
+  auditEntries            AuditEntry[]
+  careTeamMemberships     CareTeamMember[]         @relation("CareTeamMembership")
+  careTeamAdditions       CareTeamMember[]         @relation("CareTeamAddedBy")
+  referralsCreated        Referral[]               @relation("ReferralCreatedBy")
+  referralsAccepted       Referral[]               @relation("ReferralAcceptedBy")
+  referralsTargeted       Referral[]               @relation("ReferralTarget")
 }
 
+/// A practice is the tenant: a clinic as a business, with its own licence,
+/// staff, billing and legal custody of records. Every clinical record in this
+/// schema belongs to exactly one practice.
+///
+/// Not to be confused with a branch of psychology (Cognitive, Forensic, …) —
+/// those are Areas, an organisational dimension *inside* a practice. Making a
+/// branch the tenant would put every clinic in the country inside one data
+/// boundary. The practice is the wall; an area is a room.
+///
+/// See docs/multi-tenancy-design.md.
+model Practice {
+  id     String         @id @default(cuid())
+  name   String
+  slug   String         @unique
+  status PracticeStatus @default(PENDING_VERIFICATION)
+
+  /// Licence / business registration, captured at onboarding and checked before
+  /// the practice leaves PENDING_VERIFICATION. Until it does, the practice can
+  /// configure itself but cannot create patients or invite staff.
+  registrationNumber String?
+  contactEmail       String?
+  contactPhone       String?
+  addressLine        String?
+  city               String?
+  country            String?
+
+  /// How far a membership can see into the practice caseload. OPEN is right
+  /// for small clinics (most early customers). See design §6.
+  patientAccess PatientAccessMode @default(OPEN)
+
+  /// Practice-level configuration — branding, alert routing, and other knobs
+  /// that can grow without a migration. The access ladder is a first-class
+  /// column above, not buried here.
+  settings Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  areas            Area[]
+  memberships      Membership[]
+  invitations      PracticeInvitation[]
+  auditEntries     AuditEntry[]
+  patients         Patient[]
+  clinicalSessions ClinicalSession[]
+  sessionBatches   SessionBatch[]
+  scales           Scale[]
+  questionnaires   Questionnaire[]
+  notes            Note[]
+  notifications    Notification[]
+  careTeamMembers  CareTeamMember[]
+  referrals        Referral[]
+
+  @@index([status])
+}
+
+/// A subdivision inside a practice — Cognitive, Forensic, Developmental. Purely
+/// organisational: areas group practitioners and patients for routing and
+/// filtering, and referrals move a patient between them.
+///
+/// An area is never a security boundary. Sharing a patient across areas is a
+/// permission change inside one legal custodian, not a consented disclosure.
+model Area {
+  id          String     @id @default(cuid())
+  practiceId  String
+  name        String
+  /// The psychology branch this area maps to, when it maps to one at all.
+  /// Free-text areas leave it null.
+  specialty   Specialty?
+  description String?
+  createdAt   DateTime   @default(now())
+
+  practice           Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  memberships        MembershipArea[]
+  patients           PatientArea[]
+  referralsFrom      Referral[]       @relation("ReferralSourceArea")
+  referralsTo        Referral[]       @relation("ReferralTargetArea")
+
+  @@unique([practiceId, name])
+  @@index([practiceId])
+}
+
+/// One practitioner's seat in one practice.
+///
+/// Roles live here, not on User: the same human can be Owner of their own
+/// clinic and a Clinician at a teaching hospital. A membership is never
+/// deleted — departure sets status and leftAt, so authorship attribution and
+/// the audit trail stay whole.
+model Membership {
+  id         String           @id @default(cuid())
+  userId     String
+  practiceId String
+  role       MembershipRole   @default(CLINICIAN)
+  status     MembershipStatus @default(ACTIVE)
+
+  /// Licence number as registered with *this* practice. A practitioner may hold
+  /// different registrations in different places.
+  licenceNumber String?
+
+  /// Set for trainees whose notes require a supervisor's co-signature — a real
+  /// regulatory requirement in psychology, cheaper to model now than to retrofit
+  /// into the note lifecycle later.
+  supervisorId String?
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  practice    Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  supervisor  Membership?      @relation("Supervision", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisees Membership[]     @relation("Supervision")
+  areas       MembershipArea[]
+
+  @@unique([userId, practiceId])
+  @@index([practiceId, status])
+  @@index([supervisorId])
+}
+
+/// Which areas a practitioner works in, within one practice.
+model MembershipArea {
+  membershipId String
+  areaId       String
+  assignedAt   DateTime @default(now())
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  area       Area       @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([membershipId, areaId])
+  @@index([areaId])
+}
+
+/// Which areas a patient is seen in. A patient may sit in several at once —
+/// that is the intra-practice sharing case, and it needs no consent grant.
+model PatientArea {
+  patientId  String
+  areaId     String
+  assignedAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  area    Area    @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([patientId, areaId])
+  @@index([areaId])
+}
+
+/// An outstanding invitation to join a practice.
+///
+/// The accept flow splits on whether the email already has an account: an
+/// existing user accepts in one click and gains a second membership, never a
+/// second account.
+model PracticeInvitation {
+  id          String           @id @default(cuid())
+  practiceId  String
+  email       String
+  role        MembershipRole   @default(CLINICIAN)
+  /// Areas chosen at invite time; applied as MembershipArea rows on accept.
+  areaIds     String[]         @default([])
+  token       String           @unique
+  status      InvitationStatus @default(PENDING)
+  invitedById String?
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+
+  practice  Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  invitedBy User?    @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([practiceId, status])
+  @@index([email])
+}
+
+/// A named clinician on a patient's care team — intra-practice sharing.
+///
+/// Not a consent grant. Adding someone here (or adding a patient area) is how
+/// a patient is shared inside one legal custodian. See design §6.
+model CareTeamMember {
+  id         String   @id @default(cuid())
+  practiceId String
+  patientId  String
+  userId     String
+  addedById  String?
+  addedAt    DateTime @default(now())
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  user     User     @relation("CareTeamMembership", fields: [userId], references: [id], onDelete: Cascade)
+  addedBy  User?    @relation("CareTeamAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([patientId, userId])
+  @@index([practiceId, userId])
+  @@index([userId])
+}
+
+/// Internal referral between areas (or to a named clinician) inside one practice.
+///
+/// A workflow object, not a data-sharing grant. On acceptance the target area is
+/// added to the patient and the receiving clinician joins the care team.
+/// Cross-practice referral is deliberately out of scope — design the states so
+/// it can grow later. See docs/multi-tenancy-design.md §8.
+model Referral {
+  id           String           @id @default(cuid())
+  practiceId   String
+  patientId    String
+  status       ReferralStatus   @default(DRAFTED)
+  priority     ReferralPriority @default(ROUTINE)
+  reason       String
+  /// Returned to the referrer when the referral completes.
+  summary      String?
+  sourceAreaId String?
+  targetAreaId String?
+  /// Optional named receiving clinician. Null means "anyone in the target area".
+  targetUserId String?
+  createdById  String
+  acceptedById String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  sentAt       DateTime?
+  resolvedAt   DateTime?
+  completedAt  DateTime?
+
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  sourceArea Area?    @relation("ReferralSourceArea", fields: [sourceAreaId], references: [id], onDelete: SetNull)
+  targetArea Area?    @relation("ReferralTargetArea", fields: [targetAreaId], references: [id], onDelete: SetNull)
+  targetUser User?    @relation("ReferralTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  createdBy  User     @relation("ReferralCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+  acceptedBy User?    @relation("ReferralAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([practiceId, status, createdAt])
+  @@index([practiceId, createdById])
+  @@index([practiceId, targetUserId])
+  @@index([patientId])
+}
+
+/// Who did what, to whom, in which practice. Append-only.
+///
+/// Not optional in healthcare, and specifically what makes any future
+/// cross-practice disclosure defensible. Written for access to clinical data,
+/// membership changes, and anything that crosses a boundary.
+model AuditEntry {
+  id          String   @id @default(cuid())
+  practiceId  String
+  actorId     String?
+  action      String
+  subjectType String
+  subjectId   String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  practice Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  actor    User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([practiceId, createdAt])
+  @@index([practiceId, subjectType, subjectId])
+  @@index([actorId])
+}
+
+/// Scales have three ownership tiers, and the pair of nullable owner columns is
+/// how they are told apart:
+///
+///   global library   practiceId null, psychologistId null, isLibrary true
+///   practice-owned   practiceId set  — the default for anything staff build
+///   personal         practiceId null, psychologistId set — travels with the
+///                    clinician when they leave
+///
+/// Practice-owned is the default because the first time a clinician departs and
+/// wants their custom instrument, it should not be an improvised support call.
 model Scale {
-  id                 String              @id @default(cuid())
-  name               String
-  description        String?
-  psychologistId     String?
-  isLibrary          Boolean             @default(false)
-  createdAt          DateTime            @default(now())
-  assessmentSessions AssessmentSession[]
-  psychologist       User?               @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  items              ScaleItem[]
-  thresholds         SeverityThreshold[]
+  id             String              @id @default(cuid())
+  name           String
+  description    String?
+  practiceId     String?
+  psychologistId String?
+  isLibrary      Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  questionnaires Questionnaire[]
+  practice       Practice?           @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  psychologist   User?               @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  items          ScaleItem[]
+  thresholds     SeverityThreshold[]
+
+  @@index([practiceId])
+  @@index([psychologistId])
 }
 
 model ScaleItem {
@@ -102,53 +383,265 @@ model SeverityThreshold {
 }
 
 model Patient {
-  id                 String              @id @default(cuid())
-  displayName        String
-  anonymousId        String
-  psychologistId     String
-  fullName           String?
-  email              String?
-  phone              String?
-  dateOfBirth        DateTime?
-  detailsUpdatedAt   DateTime?
-  createdAt          DateTime            @default(now())
-  assessmentSessions AssessmentSession[]
-  psychologist       User                @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  id                  String            @id @default(cuid())
+  displayName         String
+  anonymousId         String
+  /// The practice that owns this record — legal custody, and the access
+  /// boundary. Never changes.
+  practiceId          String
+  /// The clinician responsible for this patient. Authorship, not ownership:
+  /// it survives the clinician leaving, and reassignment does not move the
+  /// record out of the practice.
+  psychologistId      String
+  fullName            String?
+  email               String?
+  phone               String?
+  dateOfBirth         DateTime?
+  detailsUpdatedAt    DateTime?
+  // Cross-session clinical summary. summarySessionCount records how many
+  // completed sessions it was built from, so the UI can tell the clinician the
+  // summary predates newer assessments instead of showing it as current.
+  summary             Json?
+  summaryGeneratedAt  DateTime?
+  summarySessionCount Int?
+  createdAt           DateTime          @default(now())
+  clinicalSessions    ClinicalSession[]
+  notes               Note[]
+  notifications       Notification[]
+  areas               PatientArea[]
+  careTeam            CareTeamMember[]
+  referrals           Referral[]
+  practice            Practice          @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  psychologist        User              @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
 
-  @@unique([anonymousId, psychologistId])
+  /// Scoped to the practice, not the clinician. A globally unique anonymous id
+  /// would be a correlation key across tenants — exactly what pseudonymisation
+  /// exists to prevent.
+  @@unique([practiceId, anonymousId])
+  @@index([practiceId, createdAt])
+  @@index([psychologistId])
 }
 
-model AssessmentSession {
-  id                   String            @id @default(cuid())
-  patientId            String
-  psychologistId       String
-  scaleId              String
-  status               SessionStatus     @default(PENDING)
-  token                String            @unique
+/// A clinical session is an appointment: a patient, a date, and a reason.
+/// Questionnaires hang off it — a session is not itself a questionnaire.
+/// The fill link is session-level, so one link walks the patient through every
+/// questionnaire attached to that session.
+///
+/// A DIRECT row is the same record used for a send with no appointment behind
+/// it: questionnaires straight to the patient. It carries a token, consent and
+/// questionnaires exactly like an appointment — `kind` only decides how the
+/// clinician sees it, so the fill flow, scoring and notifications never have to
+/// care which one they are looking at. `scheduledAt` is the moment it was sent.
+model ClinicalSession {
+  id             String                @id @default(cuid())
+  patientId      String
+  practiceId     String
+  psychologistId String
+  kind           SessionKind           @default(APPOINTMENT)
+  title          String
+  reason         String?
+  scheduledAt    DateTime
+  status         ClinicalSessionStatus @default(SCHEDULED)
+
+  /// Set when the session was created as part of a batch send. Nullable
+  /// because the single-patient flow — still the common case — has no batch.
+  batchId String?
+
+  token                String    @unique
   tokenExpiresAt       DateTime
-  collectDetails       Boolean           @default(false)
+  collectDetails       Boolean   @default(false)
   consentAt            DateTime?
   consentPolicyVersion String?
-  createdAt            DateTime          @default(now())
-  patient        Patient                @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  psychologist   User                   @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
-  scale          Scale                  @relation(fields: [scaleId], references: [id])
-  response       QuestionnaireResponse?
+
+  createdAt      DateTime        @default(now())
+  patient        Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  practice       Practice        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  psychologist   User            @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  batch          SessionBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  questionnaires Questionnaire[]
+  notes          Note[]
+  notifications  Notification[]
+
+  @@index([practiceId, scheduledAt])
+  @@index([practiceId, status])
+  @@index([patientId, scheduledAt])
+  @@index([patientId, kind])
+  @@index([batchId])
+  @@index([psychologistId])
+}
+
+/// One authoring action fanned out across several patients: same title, date,
+/// and scales, but a separate ClinicalSession — and therefore a separate fill
+/// token — per patient. A shared link would let one patient open another's
+/// questionnaire, so batching is grouping, never a shared session.
+///
+/// Deleting a batch dissolves the grouping only (SetNull on the sessions). The
+/// sessions, responses, and notes it produced are clinical records and outlive
+/// it.
+model SessionBatch {
+  id             String      @id @default(cuid())
+  practiceId     String
+  psychologistId String
+  /// Matches the kind of every session it created: an appointment batch or a
+  /// direct send to many patients.
+  kind           SessionKind @default(APPOINTMENT)
+  title          String
+  reason         String?
+  scheduledAt    DateTime
+  createdAt      DateTime    @default(now())
+
+  practice     Practice          @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  psychologist User              @relation(fields: [psychologistId], references: [id], onDelete: Cascade)
+  sessions     ClinicalSession[]
+
+  @@index([practiceId, createdAt])
+  @@index([psychologistId, createdAt])
+}
+
+model Questionnaire {
+  id         String              @id @default(cuid())
+  sessionId  String
+  /// Denormalised from the parent session. Reachable by join, but carrying it
+  /// here keeps every tenant filter a single-table predicate — which is what
+  /// row-level security needs in Phase 4.
+  practiceId String
+  scaleId    String
+  order      Int                 @default(1)
+  status     QuestionnaireStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+
+  session       ClinicalSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  practice      Practice               @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  scale         Scale                  @relation(fields: [scaleId], references: [id])
+  response      QuestionnaireResponse?
+  notes         Note[]
+  notifications Notification[]
+
+  @@index([practiceId, status])
+  @@index([sessionId, order])
+  @@index([scaleId])
 }
 
 model QuestionnaireResponse {
-  id           String            @id @default(cuid())
-  sessionId    String            @unique
-  itemScores   Json
-  intakeAnswers Json?
-  totalScore   Int
-  severity     String
-  completedAt  DateTime          @default(now())
-  reviewedAt   DateTime?
-  escalatedAt  DateTime?
+  id                   String        @id @default(cuid())
+  questionnaireId      String        @unique
+  itemScores           Json
+  intakeAnswers        Json?
+  totalScore           Int
+  severity             String
+  completedAt          DateTime      @default(now())
+  reviewedAt           DateTime?
+  escalatedAt          DateTime?
   narrative            Json?
   narrativeGeneratedAt DateTime?
-  session      AssessmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionnaire        Questionnaire @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+}
+
+/// One note table for all three levels. patientId is always set so the patient
+/// page can render a single chronological stream; sessionId/questionnaireId
+/// narrow what the note is attached to.
+model Note {
+  id              String   @id @default(cuid())
+  practiceId      String
+  /// Who wrote it. Survives the author leaving the practice — a departed
+  /// membership must never leave holes in the record.
+  authorId        String
+  patientId       String
+  sessionId       String?
+  questionnaireId String?
+  body            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  practice      Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  author        User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  patient       Patient          @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  session       ClinicalSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionnaire Questionnaire?   @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
+
+  @@index([practiceId, createdAt])
+  @@index([patientId, createdAt])
+  @@index([sessionId])
+  @@index([questionnaireId])
+  @@index([authorId])
+}
+
+/// A practice can configure itself while PENDING_VERIFICATION, but cannot
+/// create patients or invite staff until its licence details clear. One field,
+/// and the cheapest defence against a fake clinic holding real clinical data.
+enum PracticeStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+/// How far a membership can see into the practice caseload.
+/// Stored in Practice.settings.patientAccess; default OPEN.
+enum PatientAccessMode {
+  OPEN
+  AREA_SCOPED
+  ASSIGNED_ONLY
+}
+
+enum ReferralStatus {
+  DRAFTED
+  SENT
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum ReferralPriority {
+  ROUTINE
+  PRIORITY
+  URGENT
+}
+
+/// Branches of psychology an Area can map to. Deliberately an attribute of an
+/// area — never a tenant. OTHER covers free-text areas and anything this list
+/// does not anticipate.
+enum Specialty {
+  ABNORMAL
+  BIOPSYCHOLOGY
+  SOCIAL
+  COGNITIVE
+  DEVELOPMENTAL
+  PERSONALITY
+  FORENSIC
+  INDUSTRIAL_ORGANIZATIONAL
+  CLINICAL
+  COUNSELLING
+  OTHER
+}
+
+/// FRONT_DESK can schedule sessions and send questionnaires but must never read
+/// notes or scores — the most important distinction in this enum.
+/// SUPERVISOR is a CLINICIAN who can additionally see and co-sign supervisees'
+/// work.
+enum MembershipRole {
+  OWNER
+  ADMIN
+  CLINICIAN
+  SUPERVISOR
+  FRONT_DESK
+}
+
+/// DEPARTED memberships are kept, never deleted: access ends immediately, but
+/// authorship attribution and the audit trail must stay intact.
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEPARTED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
 }
 
 enum ItemType {
@@ -158,10 +651,23 @@ enum ItemType {
   NUMBER
 }
 
-enum SessionStatus {
+enum QuestionnaireStatus {
   PENDING
   COMPLETED
   EXPIRED
+}
+
+/// APPOINTMENT — booked with a patient, questionnaires attached to it.
+/// DIRECT — questionnaires sent on their own, no appointment.
+enum SessionKind {
+  APPOINTMENT
+  DIRECT
+}
+
+enum ClinicalSessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
 }
 
 enum NotificationType {
@@ -173,24 +679,50 @@ enum NotificationType {
   LINK_EXPIRING_SOON
   LINK_EXPIRED
   LOGIN
+  /// Existing-user invite path: surfaces in the app they already use so they
+  /// never create a second account to join another practice.
+  PRACTICE_INVITATION
 }
 
 model Notification {
-  id        String           @id @default(cuid())
-  userId    String
-  type      NotificationType
-  title     String
-  body      String
-  href      String?
-  patientId String?
-  sessionId String?
-  dedupeKey String
-  readAt    DateTime?
-  createdAt DateTime         @default(now())
+  id              String           @id @default(cuid())
+  /// The practice the notification is about. A practitioner in several
+  /// practices sees a badge per practice, and the switcher shows where their
+  /// attention is needed.
+  ///
+  /// Null for account-level notifications that belong to the human rather than
+  /// to any practice — LOGIN is the current case, and it is raised before a
+  /// practice has been resolved at all. Those surface in every context.
+  ///
+  /// SUICIDAL_IDEATION is the one deliberate exception to practice scoping: it
+  /// surfaces regardless of which practice is active, labelled with the one it
+  /// came from. See docs/multi-tenancy-design.md §9.
+  practiceId      String?
+  userId          String
+  type            NotificationType
+  title           String
+  body            String
+  href            String?
+  patientId       String?
+  // sessionId is the ClinicalSession; questionnaireId narrows to one
+  // questionnaire within it. Link-expiry alerts are session-level (the token
+  // lives there), completion/severity alerts are questionnaire-level.
+  sessionId       String?
+  questionnaireId String?
+  dedupeKey       String
+  readAt          DateTime?
+  createdAt       DateTime         @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Cascades keep the bell honest: a notification must never outlive the thing
+  // it links to, or clicking it lands on a 404.
+  practice      Practice?        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient       Patient?         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  session       ClinicalSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questionnaire Questionnaire?   @relation(fields: [questionnaireId], references: [id], onDelete: Cascade)
 
   @@unique([userId, dedupeKey])
+  @@index([practiceId, userId, readAt])
   @@index([userId, readAt, createdAt])
 }
 

@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { ChevronRight } from "lucide-react"
@@ -7,6 +9,8 @@ import { TanStackDataTable } from "@/components/data-table/data-table"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
 import { Badge } from "@/components/ui/badge"
 import { SeverityBadge } from "@/components/ui/severity-badge"
+import { SeverityMeter } from "@/components/ui/severity-meter"
+import { ScoreReadout } from "@/components/ui/score-readout"
 import type { PatientListItem } from "@/lib/patient-summary"
 
 const columns: ColumnDef<PatientListItem>[] = [
@@ -42,18 +46,27 @@ const columns: ColumnDef<PatientListItem>[] = [
     ),
   },
   {
+    id: "severity",
+    accessorFn: (row) => row.severity ?? "",
+    meta: { className: "w-24" },
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Severity" />
+    ),
+    cell: ({ row }) => <SeverityMeter severity={row.original.severity} />,
+  },
+  {
     id: "score",
     accessorFn: (row) => row.latestScore ?? -1,
+    meta: { className: "text-right" },
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Last Score" />
+      <DataTableColumnHeader column={column} title="Last score" align="right" />
     ),
     cell: ({ row }) => (
-      <span className="flex items-center gap-2">
-        {row.original.latestScore ?? "—"}
-        {row.original.severity && row.original.severity !== "none" && (
-          <SeverityBadge severity={row.original.severity} />
-        )}
-      </span>
+      <ScoreReadout
+        score={row.original.latestScore}
+        maxScore={row.original.latestMaxScore}
+        threshold={row.original.latestThreshold}
+      />
     ),
   },
   {
@@ -80,6 +93,8 @@ interface PatientListTableProps {
 }
 
 export function PatientListTable({ patients }: PatientListTableProps) {
+  const practiceHref = usePracticeHref()
+
   const hasNames = patients.some((p) => p.displayName)
   const hasScores = patients.some((p) => p.latestScore != null)
   const visibleColumns = columns.filter((column) => {
@@ -92,7 +107,7 @@ export function PatientListTable({ patients }: PatientListTableProps) {
     <TanStackDataTable
       columns={visibleColumns}
       data={patients}
-      getRowHref={(row) => `/patients/${row.id}`}
+      getRowHref={(row) => practiceHref(`/patients/${row.id}`)}
       enableSearch
       searchPlaceholder="Search by ID or name…"
       globalFilterFn={(row, filter) => {
@@ -105,7 +120,7 @@ export function PatientListTable({ patients }: PatientListTableProps) {
       mobileListClassName="divide-y"
       renderMobileRow={(row) => (
         <Link
-          href={`/patients/${row.id}`}
+          href={practiceHref(`/patients/${row.id}`)}
           className="block min-h-18 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-2">

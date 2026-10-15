@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const scale = await prisma.scale.findFirst({
+  const scale = await db.scale.findFirst({
     where: {
       id: params.id,
-      OR: [{ isLibrary: true }, { psychologistId: session.user.id }],
+      OR: [{ isLibrary: true }, { psychologistId: ctx.userId }],
     },
     include: {
       items: {
@@ -32,11 +32,12 @@ const UpdateScaleSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const scale = await prisma.scale.findFirst({
-    where: { id: params.id, psychologistId: session.user.id, isLibrary: false },
+  const scale = await db.scale.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId, isLibrary: false },
   })
   if (!scale) return NextResponse.json({ error: 'Not found or not editable' }, { status: 404 })
 
@@ -44,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const parsed = UpdateScaleSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
-  const updated = await prisma.scale.update({
+  const updated = await db.scale.update({
     where: { id: params.id },
     data: parsed.data,
   })
@@ -52,18 +53,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const scale = await prisma.scale.findFirst({
-    where: { id: params.id, psychologistId: session.user.id, isLibrary: false },
-    include: { _count: { select: { assessmentSessions: true } } },
+  const scale = await db.scale.findFirst({
+    where: { id: params.id, psychologistId: ctx.userId, isLibrary: false },
+    include: { _count: { select: { questionnaires: true } } },
   })
   if (!scale) return NextResponse.json({ error: 'Not found or not editable' }, { status: 404 })
-  if (scale._count.assessmentSessions > 0) {
-    return NextResponse.json({ error: 'Cannot delete a scale with existing sessions' }, { status: 409 })
+  if (scale._count.questionnaires > 0) {
+    return NextResponse.json({ error: 'Cannot delete a scale already used in a questionnaire' }, { status: 409 })
   }
 
-  await prisma.scale.delete({ where: { id: params.id } })
+  await db.scale.delete({ where: { id: params.id } })
   return NextResponse.json({ ok: true })
 }

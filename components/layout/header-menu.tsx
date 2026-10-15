@@ -90,7 +90,7 @@ export function HeaderMenu({
         <button
           type="button"
           aria-label="Close menu"
-          className="fixed inset-0 z-40 bg-black/40"
+          className="fixed inset-0 z-(--z-modal-backdrop) bg-black/40"
           onClick={() => setOpen(false)}
         />
       )}
@@ -99,7 +99,7 @@ export function HeaderMenu({
           role="dialog"
           aria-label={label}
           className={cn(
-            "z-50 rounded-md border bg-popover text-popover-foreground shadow-lg",
+            "z-(--z-popover) rounded-md border bg-popover text-popover-foreground shadow-lg",
             isMobile
               ? cn(
                   "fixed top-14 max-h-[min(70vh,28rem)] overflow-hidden",

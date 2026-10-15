@@ -24,7 +24,7 @@ export function SidebarCollapseTrigger({ className }: { className?: string }) {
           aria-label={label}
           title={label}
           className={cn(
-            "absolute top-40 right-0 z-50 hidden size-7 -translate-y-1/2 translate-x-1/2 md:flex",
+            "absolute top-40 right-0 z-(--z-sticky) hidden size-7 -translate-y-1/2 translate-x-1/2 md:flex",
             "items-center justify-center rounded-full",
             "border border-sidebar-border bg-background text-foreground shadow-md",
             "transition-colors hover:bg-accent hover:text-accent-foreground",

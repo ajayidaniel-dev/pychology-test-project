@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb } from '@/lib/db'
+import { forbiddenUnless } from '@/lib/roles-http'
 import { computeAlerts } from '@/lib/alert-rules'
 import { scaleNameToEnum } from '@/lib/patient-summary'
 import { buildItemLines, buildHistoryBlock, callAnthropic, ASSESSMENT_DATA_RULE } from '@/lib/anthropic'
@@ -10,7 +10,7 @@ import { z } from 'zod'
 
 const BodySchema = z.object({
   patientId: z.string().min(1),
-  sessionId: z.string().min(1),
+  questionnaireId: z.string().min(1),
   messages: z
     .array(
       z.object({
@@ -23,22 +23,24 @@ const BodySchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const denied = forbiddenUnless(ctx.role, 'viewScores')
+  if (denied) return denied
+  const db = scopedDb(ctx)
 
   const parsed = BodySchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
-  const { patientId, sessionId, messages } = parsed.data
+  const { patientId, questionnaireId, messages } = parsed.data
 
   if (messages[messages.length - 1].role !== 'user') {
     return NextResponse.json({ error: 'Last message must be from the user' }, { status: 400 })
   }
 
-  const assessmentSession = await prisma.assessmentSession.findFirst({
+  const questionnaire = await db.questionnaire.findFirst({
     where: {
-      id: sessionId,
-      patientId,
-      psychologistId: session.user.id,
+      id: questionnaireId,
+      session: { patientId, psychologistId: ctx.userId },
     },
     include: {
       response: true,
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  if (!assessmentSession?.response) {
+  if (!questionnaire?.response) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
@@ -55,7 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY not set in .env.local' }, { status: 500 })
   }
 
-  const rate = checkRateLimit(`narrative-chat:${session.user.id}`, 10, 60_000)
+  const rate = checkRateLimit(`narrative-chat:${ctx.userId}`, 10, 60_000)
   if (!rate.allowed) {
     return NextResponse.json(
       { error: 'Too many questions in a short time. Wait a moment and try again.' },
@@ -63,45 +65,45 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const itemScores = assessmentSession.response.itemScores as Record<string, number>
+  const itemScores = questionnaire.response.itemScores as Record<string, number>
   const itemLabels = Object.fromEntries(
-    assessmentSession.scale.items.map((item) => [String(item.order), item.text]),
+    questionnaire.scale.items.map((item) => [String(item.order), item.text]),
   )
   const alerts = computeAlerts(
-    scaleNameToEnum(assessmentSession.scale.name),
-    assessmentSession.response.totalScore,
+    scaleNameToEnum(questionnaire.scale.name),
+    questionnaire.response.totalScore,
     itemScores,
-    assessmentSession.response.severity,
+    questionnaire.response.severity,
   )
   const itemLines = buildItemLines(itemScores, itemLabels)
 
-  const priorSessions = await prisma.assessmentSession.findMany({
+  const prior = await db.questionnaire.findMany({
     where: {
-      patientId,
-      scaleId: assessmentSession.scaleId,
+      session: { patientId },
+      scaleId: questionnaire.scaleId,
       status: 'COMPLETED',
-      id: { not: assessmentSession.id },
+      id: { not: questionnaire.id },
       response: { isNot: null },
     },
     include: { response: { select: { totalScore: true, severity: true, completedAt: true } } },
     orderBy: { createdAt: 'desc' },
     take: 8,
   })
-  const history = priorSessions
+  const history = prior
     .map((s) => s.response!)
-    .filter((r) => r.completedAt < assessmentSession.response!.completedAt)
+    .filter((r) => r.completedAt < questionnaire.response!.completedAt)
     .reverse()
   const historyBlock = buildHistoryBlock(history)
 
-  const storedNarrative = assessmentSession.response.narrative
-    ? `\n\nAI clinical summary previously generated for this assessment:\n${JSON.stringify(assessmentSession.response.narrative, null, 2)}`
+  const storedNarrative = questionnaire.response.narrative
+    ? `\n\nAI clinical summary previously generated for this assessment:\n${JSON.stringify(questionnaire.response.narrative, null, 2)}`
     : ''
 
   const system = `You are a clinical psychologist assistant answering follow-up questions from a licensed clinician about one completed self-report assessment. You have no identifying information about the participant. ${ASSESSMENT_DATA_RULE}
 
 <assessment_data>
-Scale: ${assessmentSession.scale.name}
-Total score: ${assessmentSession.response.totalScore} — Severity: ${assessmentSession.response.severity}
+Scale: ${questionnaire.scale.name}
+Total score: ${questionnaire.response.totalScore} — Severity: ${questionnaire.response.severity}
 Item scores:
 ${itemLines}
 ${historyBlock}</assessment_data>

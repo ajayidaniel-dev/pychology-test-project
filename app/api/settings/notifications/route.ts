@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { NotificationType } from "@prisma/client"
-import { getServerSession } from "next-auth"
 import { z } from "zod"
-import { authOptions } from "@/lib/auth"
+import { getUserContext, unauthorized } from "@/lib/session-context"
 import {
   getNotificationPreferences,
   updateNotificationPreferences,
@@ -18,20 +17,16 @@ const PatchSchema = z.object({
 })
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getUserContext()
+  if (!ctx) return unauthorized()
 
-  const preferences = await getNotificationPreferences(session.user.id)
+  const preferences = await getNotificationPreferences(ctx.userId)
   return NextResponse.json({ preferences })
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const ctx = await getUserContext()
+  if (!ctx) return unauthorized()
 
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
@@ -40,7 +35,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const preferences = await updateNotificationPreferences(
-    session.user.id,
+    ctx.userId,
     parsed.data.preferences,
   )
 

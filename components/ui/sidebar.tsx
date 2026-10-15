@@ -495,24 +495,38 @@ const sidebarMenuButtonVariants = cva(
   },
 )
 
-function SidebarMenuButton({
-  asChild = false,
-  isActive = false,
-  variant = 'default',
-  size = 'default',
-  tooltip,
-  className,
-  ...props
-}: React.ComponentProps<'button'> & {
-  asChild?: boolean
-  isActive?: boolean
-  tooltip?: string | React.ComponentProps<typeof TooltipContent>
-} & VariantProps<typeof sidebarMenuButtonVariants>) {
+/**
+ * forwardRef is required, not cosmetic. This is used as the child of
+ * `DropdownMenuTrigger asChild` in NavUser, and on React 18 a plain function
+ * component cannot receive the ref Radix attaches there — the trigger lost its
+ * ref entirely (breaking anchored positioning and focus return) and logged a
+ * "Function components cannot be given refs" warning on every page load.
+ */
+const SidebarMenuButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentProps<'button'> & {
+    asChild?: boolean
+    isActive?: boolean
+    tooltip?: string | React.ComponentProps<typeof TooltipContent>
+  } & VariantProps<typeof sidebarMenuButtonVariants>
+>(function SidebarMenuButton(
+  {
+    asChild = false,
+    isActive = false,
+    variant = 'default',
+    size = 'default',
+    tooltip,
+    className,
+    ...props
+  },
+  ref,
+) {
   const Comp = asChild ? Slot : 'button'
   const { isMobile, state } = useSidebar()
 
   const button = (
     <Comp
+      ref={ref}
       data-slot="sidebar-menu-button"
       data-sidebar="menu-button"
       data-size={size}
@@ -543,7 +557,7 @@ function SidebarMenuButton({
       />
     </Tooltip>
   )
-}
+})
 
 function SidebarMenuAction({
   className,

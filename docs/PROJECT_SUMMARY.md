@@ -1,0 +1,327 @@
+# APAS — Project Summary
+
+**Product name:** APAS (Clinical Overwatch)  
+**Repository:** `psychology-test`  
+**Last updated:** 27 July 2026
+
+---
+
+## What this project is
+
+APAS is a clinical assessment platform for psychologists and clinicians. It lets practitioners:
+
+- Manage a de-identified patient caseload
+- Send secure questionnaire links to patients (no patient login required), one patient at a time or as a batch across many
+- Issue questionnaires with or without an appointment behind them
+- Score validated instruments automatically (PHQ-9, GAD-7, BDI-II, and more)
+- Review severity alerts, item-level responses, and AI-generated clinical summaries
+- Build custom scales and severity thresholds
+
+Patients complete assessments on mobile-friendly forms via a unique token link. Clinicians work inside an authenticated dashboard with alerts, notifications, and session review tools.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js 14 (App Router) |
+| Language | TypeScript |
+| Database | PostgreSQL via Prisma |
+| Auth | NextAuth.js (credentials + email verification) |
+| UI | shadcn/ui, Tailwind CSS 4, Geist font |
+| Tables | TanStack Table v8 |
+| Charts | Recharts |
+| AI summaries | Anthropic Claude API (`/api/narrative`) |
+| Toasts | Sonner |
+| Tests | Jest (73 tests across 11 suites) |
+
+---
+
+## User flows
+
+```
+/auth/signin ──┬──> /dashboard
+/auth/signup ──┘         │
+/auth/verify-email       ├──> /patients ──> /patients/[id] ──> /patients/[id]/sessions/[sessionId]
+                         │                                            └──> …/questionnaires/[questionnaireId]
+                         ├──> /batches ──> /batches/[batchId] ──> (per-patient session above)
+                         │              └──> /batches/new[?kind=direct]
+                         ├──> /scales ──> /scales/[id]
+                         │              └──> /scales/new (wizard)
+                         │
+Patient (no login) ──────┴──> /fill/[token] ──> /fill/[token]/complete
+```
+
+### Clinician dashboard
+- **Dashboard** — stat cards, alert feed for high-severity results, caseload table
+- **Patients** — searchable patient list, profile with score history chart, session list, notes
+- **Batches** — send one questionnaire set to many patients at once; filter the caseload by severity or time since last assessment, then track completion as a group
+- **Session detail** — an appointment: title, reason, date; the questionnaires attached to it, one shared fill link, session notes
+- **Direct sends** — questionnaires issued straight to a patient with no appointment: pick the scales, get the link. Listed in their own "Sent questionnaires" section on the patient page
+- **Questionnaire detail** — item scores, severity badges, AI clinical summary, Mark Reviewed / Escalate actions, questionnaire notes
+- **Scales** — library instruments (read-only) + custom scales; 3-step builder for new scales
+
+### Patient-facing
+- Token-based questionnaire at `/fill/[token]` (step-by-step on mobile)
+- Completion page with confirmation
+- Invalid/expired link handling
+
+---
+
+## Data model (high level)
+
+- **User** — clinician accounts
+- **Patient** — anonymous ID (e.g. P-001), optional display name
+- **Scale / ScaleItem / SeverityThreshold** — instrument definitions and scoring rules
+- **ClinicalSession** — an appointment (`kind: APPOINTMENT`) or a direct send (`kind: DIRECT`). Owns the single fill link (token + expiry) shared by every questionnaire in it
+- **SessionBatch** — a group of sessions created together from one authoring action; owns no token and no patient
+- **Questionnaire** — one scale administered within a session; pending/completed/expired
+- **QuestionnaireResponse** — scores, severity, `reviewedAt`, `escalatedAt`
+- **Note** — clinician notes, attachable to a patient, a session, or a single questionnaire
+- **Notification** — in-app alerts with deduplication and deep links
+
+A session is not a questionnaire. One session holds many questionnaires, the
+patient receives one link for all of them, and consent is captured once.
+
+A direct send is the same record with `kind: DIRECT`. The token, consent
+capture, scoring and notification deep links are all session-shaped, so a
+separate table would have forked every one of them; `kind` decides only what the
+clinician sees. A direct send has no clinician-authored title or date — it is
+named after its scales and stamped with the moment it was sent.
+
+A batch is not a session either. The fill token lives on `ClinicalSession` and a
+session belongs to one patient, so batching fans out into one session — and one
+private token — per patient. `ClinicalSession.batchId` is nullable, and deleting
+a batch nulls it rather than cascading: the grouping goes, the clinical record
+stays.
+
+### Library scales (seeded)
+PHQ-9, GAD-7, BDI-II, DASS-21, AUDIT, PCL-5
+
+---
+
+## Work completed
+
+### 1. UI upgrade (Phases 0–8)
+
+A full design-system refresh:
+
+- Design tokens, shared layout components (`PageHeader`, `EmptyState`, `SectionHeader`, auth shell)
+- Responsive sidebar with collapse, dashboard header, dark mode toggle
+- Dashboard stat cards, alert feed, caseload section
+- Patient list, profile, session tables with status badges
+- Scale library, detail pages, new-scale wizard
+- Patient questionnaire: fill shell, step form, option cards, metadata/OG, loading states
+- Toasts, lazy-loaded charts, accessibility (`aria-live`, focus rings)
+
+### 2. In-app notifications
+
+End-to-end notification system:
+
+- **Schema:** `Notification` model + `NotificationType` enum (completed, severity, SI, link expiry, login, etc.)
+- **Service:** [`lib/notifications.ts`](../lib/notifications.ts) — create, dedupe, reconcile, list, mark read, resolve unreviewed
+- **API:** `GET/PATCH /api/notifications`
+- **Triggers:** questionnaire submit, daily login, link expiry reconciliation, session reviewed
+- **UI:** notification bell in header, expandable items, “View session” / “View patient” links
+- **Tests:** 9 notification unit tests
+
+### 3. Header menus (notification bell + account)
+
+Radix Popover/Dropdown positioned panels off-screen in the sticky header. Replaced with a custom [`HeaderMenu`](../components/layout/header-menu.tsx):
+
+- Local state, absolute positioning below trigger (no portal)
+- Click-outside and Escape to close
+- Used for notification bell and avatar account menu
+
+### 4. TanStack Table migration
+
+All data tables migrated from a basic `DataTable` wrapper to a shared TanStack Table kit:
+
+| Surface | Component |
+|---------|-----------|
+| Dashboard caseload | `caseload-table.tsx` |
+| Patients list | `patient-list-table.tsx` |
+| Patient sessions | `patient-sessions-table.tsx` |
+| Session questionnaires | `session-questionnaires-table.tsx` |
+| Questionnaire item scores | `item-scores-table.tsx` |
+| Scale thresholds | `scale-thresholds-table.tsx` |
+| Scales library + my scales | `scales-table.tsx` |
+
+**Shared kit** (`components/data-table/`):
+- Sortable column headers
+- Client-side pagination (10/20/50 rows)
+- Search on patients and scales tables
+- Mobile card fallback from the same table instance
+- Clickable rows with keyboard support
+
+**Fixes applied during migration:**
+- Removed blank “actions” column (chevron merged into last data column)
+- Full-width header background on `<thead>`
+- `"use client"` on section wrappers to fix React Client Manifest errors
+- Removed invalid `<Link>` inside `<tr>` that caused column misalignment
+
+### 5. Questionnaire & content fixes
+
+- BDI-II description split: scale summary vs. instructions on separate lines
+- AI narrative route uses Claude API (model must be kept current — retired models return 404)
+
+### 6. Questionnaire review actions
+
+- **Mark Reviewed** — sets `reviewedAt`, clears unreviewed notifications
+- **Escalate to Supervisor** — sets `escalatedAt` (audit flag; no email/supervisor workflow yet)
+
+### 7. Sessions separated from questionnaires
+
+Sessions used to *be* questionnaires — creating one forced a scale choice up
+front. Split into `ClinicalSession` (the appointment) and `Questionnaire` (a
+scale within it), with one fill link per session and notes at all three levels.
+
+### 9. Questionnaires outside a session
+
+Direct sends: "Send questionnaire" on a patient hands back a fill link with no
+appointment booked, and `/batches/new?kind=direct` does the same across many
+patients. Backed by `ClinicalSession.kind`, so the fill flow, scoring, alerts
+and notifications were untouched. Full write-up in
+[`docs/direct-sends-report.md`](direct-sends-report.md).
+
+### 8. Batch questionnaires
+
+One authoring action across many patients, plus four session-screen fixes
+(row-click 404, an actions menu rendering offscreen because `Button` didn't
+forward refs on React 18, the fill skeleton escaping its shell, and stale CTA
+copy). Full write-up in
+[`docs/batch-questionnaires-report.md`](batch-questionnaires-report.md).
+
+Selection filters — current severity, time since last assessment — narrow the
+caseload; checkboxes commit. `TanStackDataTable` gained opt-in row selection
+(default off) to support the picker.
+
+---
+
+## Key directories
+
+```
+app/
+  (dashboard)/     # Clinician pages (dashboard, patients, batches, scales)
+  api/             # REST routes (auth, patients, batches, scales, fill, notifications, narrative)
+  auth/            # Sign in, sign up, verify email
+  fill/            # Patient questionnaire (public, token-based)
+
+components/
+  batches/         # Batch picker, criteria bar, list/detail tables, actions
+  data-table/      # TanStack Table kit (sorting, paging, mobile rows, opt-in selection)
+  dashboard/       # Stat cards, alerts, caseload
+  layout/          # Sidebar, header, shell, HeaderMenu
+  notes/           # Note list + composer, shared across all three levels
+  notifications/   # Bell, notification rows
+  patients/        # List, profile, session list
+  questionnaire/   # Patient fill flow
+  scales/          # Library, wizard, thresholds
+  sessions/        # Session detail, questionnaires, charts, narrative, item scores
+
+lib/
+  notifications.ts # Notification service
+  alert-rules.ts   # Severity / SI detection
+  seed-scales.ts   # Library scale definitions
+  batch-filters.ts # Pure caseload filtering for batch selection
+  direct-sends.ts  # Title derivation + rolled-up status for appointment-free sends
+  batches.ts       # Batch progress + shared Prisma include
+  session-links.ts # Token renewal (shared by single-session and batch renew)
+  patient-summary.ts
+  scoring-engine.ts
+
+prisma/
+  schema.prisma
+  migrations/
+```
+
+---
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection |
+| `NEXTAUTH_SECRET` | Session encryption |
+| `NEXTAUTH_URL` | App base URL |
+| `ANTHROPIC_API_KEY` | AI clinical summaries |
+
+---
+
+## Running locally
+
+```bash
+yarn install
+npx prisma migrate deploy
+npx prisma db seed   # optional: library scales
+yarn dev
+```
+
+Tests: `yarn test`  
+Build: `yarn build` (if stale cache errors: `rm -rf .next && yarn dev`)
+
+---
+
+## Testing coverage
+
+| Area | Test file |
+|------|-----------|
+| Alert rules | `__tests__/lib/alert-rules.test.ts` |
+| Notifications | `__tests__/lib/notifications.test.ts` |
+| Scale scoring | `__tests__/lib/scale-scoring.test.ts` |
+| Batch selection filters | `__tests__/lib/batch-filters.test.ts` |
+| Direct send titles + status | `__tests__/lib/direct-sends.test.ts` |
+| Tokens / passwords / anonymous IDs | `__tests__/lib/*.test.ts` |
+
+---
+
+## Known limitations & follow-ups
+
+1. **AI summaries** — require a valid Anthropic model ID in `app/api/narrative/route.ts`; retired models cause “Summary unavailable”
+2. **Escalate to Supervisor** — timestamp only; no supervisor role, email, or queue yet
+3. **Pagination** — client-side only (fine for typical caseload sizes)
+4. **Server-side table filtering** — not implemented; all list data loaded on page render
+5. **No email delivery** — there is no mail provider; fill links must be copied or exported as CSV and sent by hand, including for batches and direct sends
+6. **Batch completions are noisy** — one bell notification per questionnaire (no batch-level digest), and one AI summary regeneration per submission, so a large batch landing at once clusters both
+7. **New top-level authenticated routes need a `middleware.ts` matcher entry** — the `(dashboard)` layout's session check is a backstop, so omitting it fails quietly: the page still redirects, but the sign-in `callbackUrl` deep link is lost
+
+---
+
+## Architecture diagram
+
+```mermaid
+flowchart TB
+  subgraph clinician [Clinician - Authenticated]
+    Dashboard
+    Patients
+    Scales
+    SessionReview
+  end
+
+  subgraph patient [Patient - Public Token]
+    FillForm
+    Complete
+  end
+
+  subgraph backend [Backend]
+    Prisma[(PostgreSQL)]
+    NextAuth
+    ClaudeAPI[Anthropic API]
+    NotificationService
+  end
+
+  clinician --> Prisma
+  clinician --> ClaudeAPI
+  clinician --> NotificationService
+  patient --> FillForm
+  FillForm --> Prisma
+  FillForm --> NotificationService
+  NotificationService --> Prisma
+```
+
+---
+
+## Summary
+
+APAS is a production-shaped clinical assessment tool: secure patient links, automated scoring on validated instruments, severity alerting, AI-assisted review summaries, and a polished clinician UI. Recent work separated sessions from questionnaires, then added batch sends — one questionnaire set fanned out to many patients, each still receiving their own private link — alongside notifications, responsive data tables, and the dashboard polish phases.

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { ConsentStep } from "@/components/questionnaire/consent-step"
 import { DetailsStep } from "@/components/questionnaire/details-step"
 import { IntakeStep } from "@/components/questionnaire/intake-step"
@@ -14,12 +15,20 @@ interface DbItem {
   options: { label: string; value: number | null }[]
 }
 
-interface FillFlowProps {
-  scale: string
+export interface PendingQuestionnaire {
+  id: string
+  /** Enum key used for hardcoded fallback items and scale metadata. */
+  scaleKey: string
   scaleName: string
+  description: string | null
+  items: DbItem[]
+}
+
+interface FillFlowProps {
   token: string
-  description?: string | null
-  dbItems?: DbItem[]
+  sessionTitle: string
+  questionnaires: PendingQuestionnaire[]
+  practiceName: string | null
   clinicianName: string | null
   /** Effective value: link has collection enabled AND patient has no details yet. */
   collectDetails: boolean
@@ -28,26 +37,35 @@ interface FillFlowProps {
 type Step = "consent" | "details" | "intake" | "questionnaire"
 
 /**
- * Pre-questionnaire stepper: consent (always) → details → intake (both only
- * when collectDetails). Everything is held client-side and submitted in one
- * POST at the end, so nothing identifying is stored if the patient abandons.
+ * Drives one session's fill link end to end: consent (always) → details →
+ * intake (both only when collectDetails) → each pending questionnaire in turn.
+ *
+ * Consent and identity are session-level and held client-side until the first
+ * questionnaire is submitted, so nothing identifying is stored if the patient
+ * abandons before answering anything.
  */
 export function FillFlow({
-  scale,
-  scaleName,
   token,
-  description,
-  dbItems,
+  sessionTitle,
+  questionnaires,
+  practiceName,
   clinicianName,
   collectDetails,
 }: FillFlowProps) {
+  const router = useRouter()
   const [step, setStep] = useState<Step>("consent")
   const [details, setDetails] = useState<PatientDetails | null>(null)
   const [intake, setIntake] = useState<IntakeAnswers | null>(null)
+  const [index, setIndex] = useState(0)
+  /** Identity is sent once, with the first questionnaire only. */
+  const [identitySent, setIdentitySent] = useState(false)
 
   const preSteps: Step[] = collectDetails
     ? ["consent", "details", "intake"]
     : ["consent"]
+
+  const total = questionnaires.length
+  const current = questionnaires[index]
 
   if (step !== "questionnaire") {
     const stepIndex = preSteps.indexOf(step)
@@ -60,8 +78,13 @@ export function FillFlow({
 
         {step === "consent" && (
           <ConsentStep
+            practiceName={practiceName}
             clinicianName={clinicianName}
-            scaleName={scaleName}
+            scaleName={
+              total === 1
+                ? questionnaires[0].scaleName
+                : `${total} questionnaires`
+            }
             collectDetails={collectDetails}
             onConsent={() =>
               setStep(collectDetails ? "details" : "questionnaire")
@@ -93,18 +116,36 @@ export function FillFlow({
     )
   }
 
+  if (!current) return null
+
+  function onSubmitted() {
+    setIdentitySent(true)
+    if (index + 1 < total) {
+      setIndex((i) => i + 1)
+      return
+    }
+    router.push(`/fill/${token}/complete`)
+  }
+
   return (
     <QuestionnaireStepForm
-      scale={scale}
-      scaleName={scaleName}
+      key={current.id}
+      scale={current.scaleKey}
+      scaleName={current.scaleName}
       token={token}
-      description={description}
-      dbItems={dbItems}
+      questionnaireId={current.id}
+      description={current.description}
+      dbItems={current.items}
+      sequenceLabel={
+        total > 1 ? `${sessionTitle} · ${index + 1} of ${total}` : null
+      }
+      isLastInSession={index + 1 === total}
       extraPayload={{
         consent: true,
-        ...(details ? { details } : {}),
-        ...(intake ? { intake } : {}),
+        ...(details && !identitySent ? { details } : {}),
+        ...(intake && !identitySent ? { intake } : {}),
       }}
+      onSubmitted={onSubmitted}
     />
   )
 }

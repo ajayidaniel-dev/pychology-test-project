@@ -1,9 +1,8 @@
 // app/page.tsx
-import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
 
-import { authOptions } from "@/lib/auth"
-import { LandingSwiss } from "@/components/landing/landing-swiss"
+import { getUserContext } from "@/lib/session-context"
+import { LandingOverwatch } from "@/components/landing/landing-overwatch"
 
 export const metadata = {
   description:
@@ -11,8 +10,10 @@ export const metadata = {
 }
 
 export default async function RootPage() {
-  const session = await getServerSession(authOptions)
-  if (session) redirect("/dashboard")
+  const ctx = await getUserContext()
+  // Resolving which practice happens in /practice-redirect, which has the
+  // membership lookup; the landing page should not grow one.
+  if (ctx) redirect("/practice-redirect")
 
-  return <LandingSwiss />
+  return <LandingOverwatch />
 }

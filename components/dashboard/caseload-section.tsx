@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -19,16 +21,20 @@ export interface CaseloadPatient {
   delta: number | null
   scoreHistory: number[]
   lastAssessedAt: Date | null
+  latestMaxScore: number | null
+  latestThreshold: number | null
 }
 
 export function CaseloadSection({ patients }: { patients: CaseloadPatient[] }) {
+  const practiceHref = usePracticeHref()
+
   return (
     <section className="space-y-3">
       <Card className="gap-0 overflow-hidden py-0 shadow-sm">
         <CardHeader className="border-b px-4 py-4 md:px-6">
           <SectionHeader
             title="Caseload"
-            action={{ label: "Manage patients", href: "/patients" }}
+            action={{ label: "Manage patients", href: practiceHref("/patients") }}
           />
         </CardHeader>
 
@@ -41,7 +47,7 @@ export function CaseloadSection({ patients }: { patients: CaseloadPatient[] }) {
               description="Add your first patient to start sending assessment links and tracking scores."
               action={
                 <Button asChild>
-                  <Link href="/patients">Add your first patient</Link>
+                  <Link href={practiceHref("/patients")}>Add your first patient</Link>
                 </Button>
               }
             />

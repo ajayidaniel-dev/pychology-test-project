@@ -1,11 +1,12 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { BookOpen, ChevronRight, User } from "lucide-react"
 import { TanStackDataTable } from "@/components/data-table/data-table"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
-import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 export interface ScaleTableRow {
@@ -22,15 +23,12 @@ const columns: ColumnDef<ScaleTableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Name" />
     ),
+    // No "Library" badge. The table only ever renders inside a section already
+    // headed "Library Scales" or "My Scales", so the badge repeated a fact the
+    // heading had just stated — on every row of one table and no row of the
+    // other, which is the definition of a chip that carries no information.
     cell: ({ row }) => (
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{row.original.name}</span>
-        {row.original.isLibrary && (
-          <Badge variant="secondary" className="text-xs font-normal">
-            Library
-          </Badge>
-        )}
-      </div>
+      <span className="font-medium">{row.original.name}</span>
     ),
   },
   {
@@ -38,8 +36,17 @@ const columns: ColumnDef<ScaleTableRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Description" />
     ),
+    /*
+     * truncate, not line-clamp-1: TableCell sets whitespace-nowrap, so the
+     * text never forms a second line box and line-clamp produced no ellipsis
+     * — the cell just hard-clipped mid-word. title= keeps the full text
+     * reachable on hover now that it's visibly shortened.
+     */
     cell: ({ row }) => (
-      <span className="line-clamp-1 max-w-md text-muted-foreground">
+      <span
+        className="block truncate text-muted-foreground"
+        title={row.original.description ?? undefined}
+      >
         {row.original.description ?? "—"}
       </span>
     ),
@@ -47,12 +54,15 @@ const columns: ColumnDef<ScaleTableRow>[] = [
   {
     id: "items",
     accessorFn: (row) => row._count?.items ?? 0,
+    meta: { className: "text-right" },
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Items" />
+      <DataTableColumnHeader column={column} title="Items" align="right" />
     ),
+    // Mono tabular-nums, right-aligned: same figure vocabulary as every other
+    // count in the app, so digits stack into one scannable edge.
     cell: ({ row }) => (
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground">
+      <div className="flex items-center justify-end gap-2">
+        <span className="font-mono text-sm tabular-nums text-muted-foreground">
           {row.original._count?.items ?? "—"}
         </span>
         <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
@@ -70,6 +80,8 @@ export function ScalesTable({
   scales,
   searchPlaceholder = "Search scales…",
 }: ScalesTableProps) {
+  const practiceHref = usePracticeHref()
+
   const hasDescriptions = scales.some((s) => s.description)
   const visibleColumns = columns.filter((column) => {
     if ("accessorKey" in column && column.accessorKey === "description") return hasDescriptions
@@ -80,7 +92,7 @@ export function ScalesTable({
     <TanStackDataTable
       columns={visibleColumns}
       data={scales}
-      getRowHref={(row) => `/scales/${row.id}`}
+      getRowHref={(row) => practiceHref(`/scales/${row.id}`)}
       enableSearch
       searchPlaceholder={searchPlaceholder}
       globalFilterFn={(row, filter) => {
@@ -93,7 +105,7 @@ export function ScalesTable({
       mobileListClassName="divide-y"
       renderMobileRow={(scale) => (
         <Link
-          href={`/scales/${scale.id}`}
+          href={practiceHref(`/scales/${scale.id}`)}
           className="block min-h-22 px-4 py-3 transition-colors hover:bg-accent/50 active:bg-accent"
         >
           <div className="flex items-start justify-between gap-3">
@@ -111,14 +123,7 @@ export function ScalesTable({
                 )}
               </div>
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium">{scale.name}</p>
-                  {scale.isLibrary && (
-                    <Badge variant="secondary" className="text-xs font-normal">
-                      Library
-                    </Badge>
-                  )}
-                </div>
+                <p className="text-sm font-medium">{scale.name}</p>
                 {scale.description && (
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {scale.description}

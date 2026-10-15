@@ -1,5 +1,7 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -16,6 +18,8 @@ export function PatientListSection({
   patients,
   emptyAction,
 }: PatientListSectionProps) {
+  const practiceHref = usePracticeHref()
+
   if (patients.length === 0) {
     return (
       <EmptyState
@@ -25,7 +29,7 @@ export function PatientListSection({
         action={
           emptyAction ?? (
             <Button asChild>
-              <Link href="/patients">Add first patient</Link>
+              <Link href={practiceHref("/patients")}>Add first patient</Link>
             </Button>
           )
         }

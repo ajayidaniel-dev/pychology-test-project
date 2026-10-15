@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import prisma from '@/lib/prisma'
+import { getPracticeContext, practiceContextFailure } from '@/lib/session-context'
+import { scopedDb, type ScopedDb } from '@/lib/db'
 import { z } from 'zod'
 
 const OptionSchema = z.object({
@@ -18,17 +17,18 @@ const AddItemSchema = z.object({
   options: z.array(OptionSchema).optional(),
 })
 
-async function assertOwner(scaleId: string, userId: string) {
-  return prisma.scale.findFirst({
+async function assertOwner(db: ScopedDb, scaleId: string, userId: string) {
+  return db.scale.findFirst({
     where: { id: scaleId, psychologistId: userId, isLibrary: false },
   })
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const ctx = await getPracticeContext()
+  if (!ctx) return practiceContextFailure()
+  const db = scopedDb(ctx)
 
-  const scale = await assertOwner(params.id, session.user.id)
+  const scale = await assertOwner(db, params.id, ctx.userId)
   if (!scale) return NextResponse.json({ error: 'Not found or not editable' }, { status: 404 })
 
   const body = await req.json()
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const { options, ...itemData } = parsed.data
 
-  const item = await prisma.scaleItem.create({
+  const item = await db.scaleItem.create({
     data: {
       ...itemData,
       scaleId: params.id,

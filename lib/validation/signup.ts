@@ -62,14 +62,18 @@ export function getPasswordStrength(password: string): PasswordStrength {
 
   const met = getPasswordRequirements(password).filter((r) => r.met).length
 
+  // Intensity of ONE hue, never a red/amber/green ramp. A traffic-light scale
+  // here would teach the severity vocabulary — the same colours that mean
+  // patient risk everywhere else in APAS — on a password field. Strength is
+  // carried by bar width, the label, and the requirement checklist instead.
   if (met <= 2) {
-    return { score: 25, label: "Weak", colorClass: "bg-destructive" }
+    return { score: 25, label: "Weak", colorClass: "bg-muted-foreground" }
   }
   if (met === 3) {
-    return { score: 50, label: "Fair", colorClass: "bg-amber-500" }
+    return { score: 50, label: "Fair", colorClass: "bg-primary/40" }
   }
   if (met === 4) {
-    return { score: 75, label: "Good", colorClass: "bg-primary" }
+    return { score: 75, label: "Good", colorClass: "bg-primary/70" }
   }
-  return { score: 100, label: "Strong", colorClass: "bg-emerald-500" }
+  return { score: 100, label: "Strong", colorClass: "bg-primary" }
 }

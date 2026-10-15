@@ -1,65 +1,70 @@
 "use client"
 
+import { usePracticeHref } from "@/components/layout/practice-provider"
+
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 import { ChevronRight } from "lucide-react"
 import { TanStackDataTable } from "@/components/data-table/data-table"
 import { DataTableColumnHeader } from "@/components/data-table/data-table-column-header"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { SeverityBadge } from "@/components/ui/severity-badge"
 import { CopyLinkButton } from "@/components/sessions/copy-link-button"
-import type { SeverityLevel } from "@/components/ui/severity-badge"
+import { SessionStatusBadge } from "@/components/sessions/status-badges"
 import type { PatientSessionRow } from "@/components/patients/patient-sessions-section"
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "COMPLETED") {
-    return (
-      <Badge variant="outline" className="border-severity-low/40 text-severity-low">
-        Completed
-      </Badge>
-    )
-  }
-  if (status === "PENDING") {
-    return (
-      <Badge variant="outline" className="border-severity-moderate/40 text-severity-moderate">
-        Pending
-      </Badge>
-    )
-  }
-  return <Badge variant="secondary">{status}</Badge>
+function formatDate(date: Date): string {
+  return new Date(date).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
 }
 
-function severityToLevel(severity: string | null): SeverityLevel | null {
-  if (
-    severity === "critical" ||
-    severity === "high" ||
-    severity === "moderate" ||
-    severity === "low"
-  ) {
-    return severity
-  }
-  return null
+/** "2 of 3 completed" — the honest state of a session's questionnaires. */
+function progressLabel(row: PatientSessionRow): string {
+  if (row.questionnaireCount === 0) return "No questionnaires"
+  return `${row.completedCount} of ${row.questionnaireCount} completed`
 }
 
-function buildColumns(patientId: string): ColumnDef<PatientSessionRow>[] {
+function buildColumns(): ColumnDef<PatientSessionRow>[] {
   return [
     {
-      accessorKey: "index",
+      accessorKey: "scheduledAt",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="#" />
+        <DataTableColumnHeader column={column} title="Date" />
       ),
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.index}</span>
+        <span className="whitespace-nowrap text-muted-foreground">
+          {formatDate(row.original.scheduledAt)}
+        </span>
       ),
     },
     {
-      accessorKey: "scaleName",
+      accessorKey: "title",
       header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Scale" />
+        <DataTableColumnHeader column={column} title="Session" />
       ),
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.scaleName}</span>
+        <div className="min-w-0">
+          <p className="truncate font-medium">{row.original.title}</p>
+          {row.original.scaleNames.length > 0 && (
+            <p className="truncate text-xs text-muted-foreground">
+              {row.original.scaleNames.join(", ")}
+            </p>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "progress",
+      accessorFn: (row) => row.completedCount,
+      header: ({ column }) => (
+        <DataTableColumnHeader column={column} title="Questionnaires" />
+      ),
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {progressLabel(row.original)}
+        </span>
       ),
     },
     {
@@ -67,25 +72,7 @@ function buildColumns(patientId: string): ColumnDef<PatientSessionRow>[] {
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title="Status" />
       ),
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
-    },
-    {
-      id: "score",
-      accessorFn: (row) => row.score ?? -1,
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Score" />
-      ),
-      cell: ({ row }) => row.original.score ?? "—",
-    },
-    {
-      accessorKey: "severity",
-      header: ({ column }) => (
-        <DataTableColumnHeader column={column} title="Severity" />
-      ),
-      cell: ({ row }) => {
-        const level = severityToLevel(row.original.severity)
-        return level ? <SeverityBadge severity={level} /> : "—"
-      },
+      cell: ({ row }) => <SessionStatusBadge status={row.original.status} />,
     },
     {
       id: "actions",
@@ -93,13 +80,16 @@ function buildColumns(patientId: string): ColumnDef<PatientSessionRow>[] {
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const session = row.original
-        if (session.status === "COMPLETED") {
-          return <ChevronRight className="size-4 text-muted-foreground" />
-        }
-        if (session.status === "PENDING") {
-          return <CopyLinkButton token={session.token} iconOnly />
-        }
-        return null
+        // The link is only worth copying while someone can still fill it.
+        const canShare =
+          session.completedCount < session.questionnaireCount &&
+          !session.linkExpired &&
+          session.status !== "CANCELLED"
+        return canShare ? (
+          <CopyLinkButton token={session.token} iconOnly />
+        ) : (
+          <ChevronRight className="size-4 text-muted-foreground" />
+        )
       },
     },
   ]
@@ -114,53 +104,45 @@ export function PatientSessionsTable({
   patientId,
   sessions,
 }: PatientSessionsTableProps) {
-  const hasScores = sessions.some((s) => s.score != null)
-  const hasSeverity = sessions.some((s) => severityToLevel(s.severity))
-  const columns = buildColumns(patientId).filter((column) => {
-    if (column.id === "score" || ("accessorKey" in column && column.accessorKey === "score")) return hasScores
-    if ("accessorKey" in column && column.accessorKey === "severity") return hasSeverity
-    return true
-  })
+  const practiceHref = usePracticeHref()
 
   return (
     <TanStackDataTable
-      columns={columns}
+      columns={buildColumns()}
       data={sessions}
       shell={false}
-      isRowClickable={(row) => row.status === "COMPLETED"}
-      getRowHref={(row) =>
-        `/patients/${patientId}/sessions/${row.id}`
-      }
+      isRowClickable={() => true}
+      getRowHref={(row) => practiceHref(`/patients/${patientId}/sessions/${row.id}`)}
       mobileListClassName="divide-y"
       renderMobileRow={(session) => (
         <div className="px-4 py-3">
           <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-medium">{session.scaleName}</p>
+            <div className="min-w-0">
+              <p className="truncate font-medium">{session.title}</p>
               <p className="text-xs text-muted-foreground">
-                Session {session.index}
+                {formatDate(session.scheduledAt)} · {progressLabel(session)}
               </p>
             </div>
-            <StatusBadge status={session.status} />
+            <SessionStatusBadge status={session.status} />
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted-foreground">
-              Score: {session.score ?? "—"}
-            </span>
-            {session.severity && severityToLevel(session.severity) && (
-              <SeverityBadge severity={severityToLevel(session.severity)!} />
-            )}
-          </div>
-          <div className="mt-3">
-            {session.status === "COMPLETED" ? (
-              <Button variant="outline" size="sm" className="w-full" asChild>
-                <Link href={`/patients/${patientId}/sessions/${session.id}`}>
-                  View AI Summary
-                </Link>
-              </Button>
-            ) : session.status === "PENDING" ? (
-              <CopyLinkButton token={session.token} />
-            ) : null}
+
+          {session.scaleNames.length > 0 && (
+            <p className="mt-2 truncate text-sm text-muted-foreground">
+              {session.scaleNames.join(", ")}
+            </p>
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1" asChild>
+              <Link href={practiceHref(`/patients/${patientId}/sessions/${session.id}`)}>
+                Open session
+              </Link>
+            </Button>
+            {session.completedCount < session.questionnaireCount &&
+              !session.linkExpired &&
+              session.status !== "CANCELLED" && (
+                <CopyLinkButton token={session.token} />
+              )}
           </div>
         </div>
       )}

@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { practiceHref } from "@/lib/practice-path-server"
 import { Lock } from "lucide-react"
 import {
   Breadcrumb,
@@ -32,7 +33,7 @@ export function ScaleDetailHeader({
           <BreadcrumbList>
             <BreadcrumbItem>
               <BreadcrumbLink asChild>
-                <Link href="/scales">Scales</Link>
+                <Link href={practiceHref("/scales")}>Scales</Link>
               </BreadcrumbLink>
             </BreadcrumbItem>
             <BreadcrumbSeparator />

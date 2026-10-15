@@ -1,4 +1,6 @@
 import { NotificationType, type Notification } from "@prisma/client"
+import type { PrismaLike } from "@/lib/db"
+import { practicePath } from "@/lib/practice-path"
 import prisma from "@/lib/prisma"
 import { isNotificationEnabled } from "@/lib/notification-preferences"
 import { computeAlerts } from "@/lib/alert-rules"
@@ -15,11 +17,14 @@ const TYPE_PRIORITY: Record<NotificationType, number> = {
   QUESTIONNAIRE_COMPLETED: 4,
   LINK_EXPIRING_SOON: 5,
   LINK_EXPIRED: 6,
-  LOGIN: 7,
+  PRACTICE_INVITATION: 7,
+  LOGIN: 8,
 }
 
 export interface CreateNotificationInput {
   userId: string
+  /** Null for account-level notifications (LOGIN), which belong to no practice. */
+  practiceId?: string | null
   type: NotificationType
   title: string
   body: string
@@ -27,9 +32,12 @@ export interface CreateNotificationInput {
   href?: string | null
   patientId?: string | null
   sessionId?: string | null
+  questionnaireId?: string | null
 }
 
-export interface SessionSubmitContext {
+export interface QuestionnaireSubmitContext {
+  questionnaireId: string
+  practiceId: string
   sessionId: string
   patientId: string
   psychologistId: string
@@ -40,8 +48,8 @@ export interface SessionSubmitContext {
   storedSeverity: string
 }
 
-export function buildSessionSubmitNotifications(
-  ctx: SessionSubmitContext,
+export function buildQuestionnaireSubmitNotifications(
+  ctx: QuestionnaireSubmitContext,
 ): CreateNotificationInput[] {
   const scale = scaleNameToEnum(ctx.scaleName)
   const alerts = computeAlerts(
@@ -50,19 +58,22 @@ export function buildSessionSubmitNotifications(
     ctx.itemScores,
     ctx.storedSeverity,
   )
-  const href = `/patients/${ctx.patientId}/sessions/${ctx.sessionId}`
+  const href = `/patients/${ctx.patientId}/sessions/${ctx.sessionId}/questionnaires/${ctx.questionnaireId}`
   const base = {
     userId: ctx.psychologistId,
+    practiceId: ctx.practiceId,
     patientId: ctx.patientId,
     sessionId: ctx.sessionId,
+    questionnaireId: ctx.questionnaireId,
     href,
   }
+  const key = ctx.questionnaireId
 
   const notifications: CreateNotificationInput[] = [
     {
       ...base,
       type: NotificationType.QUESTIONNAIRE_COMPLETED,
-      dedupeKey: `session:${ctx.sessionId}:completed`,
+      dedupeKey: `questionnaire:${key}:completed`,
       title: "Questionnaire completed",
       body: `${ctx.anonymousId} completed ${ctx.scaleName}.`,
     },
@@ -72,7 +83,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.SUICIDAL_IDEATION,
-      dedupeKey: `session:${ctx.sessionId}:si`,
+      dedupeKey: `questionnaire:${key}:si`,
       title: "Suicidal ideation endorsed",
       body: `${ctx.anonymousId} endorsed suicidal ideation on ${ctx.scaleName}. Immediate review required.`,
     })
@@ -82,7 +93,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.SEVERITY_CRITICAL,
-      dedupeKey: `session:${ctx.sessionId}:critical`,
+      dedupeKey: `questionnaire:${key}:critical`,
       title: "Critical severity result",
       body: `${ctx.anonymousId} scored ${ctx.totalScore} on ${ctx.scaleName} (critical).`,
     })
@@ -90,7 +101,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.SEVERITY_HIGH,
-      dedupeKey: `session:${ctx.sessionId}:high`,
+      dedupeKey: `questionnaire:${key}:high`,
       title: "High severity result",
       body: `${ctx.anonymousId} scored ${ctx.totalScore} on ${ctx.scaleName} (high).`,
     })
@@ -104,7 +115,7 @@ export function buildSessionSubmitNotifications(
     notifications.push({
       ...base,
       type: NotificationType.UNREVIEWED_SEVERE,
-      dedupeKey: `session:${ctx.sessionId}:unreviewed`,
+      dedupeKey: `questionnaire:${key}:unreviewed`,
       title: "Unreviewed assessment",
       body: `${ctx.anonymousId}'s ${ctx.scaleName} result needs clinical review.`,
     })
@@ -113,7 +124,7 @@ export function buildSessionSubmitNotifications(
   return notifications
 }
 
-const SESSION_LINK_TYPES = new Set<NotificationType>([
+const QUESTIONNAIRE_LINK_TYPES = new Set<NotificationType>([
   NotificationType.QUESTIONNAIRE_COMPLETED,
   NotificationType.SEVERITY_CRITICAL,
   NotificationType.SEVERITY_HIGH,
@@ -121,27 +132,33 @@ const SESSION_LINK_TYPES = new Set<NotificationType>([
   NotificationType.UNREVIEWED_SEVERE,
 ])
 
-const PATIENT_LINK_TYPES = new Set<NotificationType>([
+const SESSION_LINK_TYPES = new Set<NotificationType>([
   NotificationType.LINK_EXPIRING_SOON,
   NotificationType.LINK_EXPIRED,
 ])
 
 export function resolveNotificationHref(
-  item: Pick<Notification, "type" | "href" | "patientId" | "sessionId">,
+  item: Pick<
+    Notification,
+    "type" | "href" | "patientId" | "sessionId" | "questionnaireId"
+  >,
 ): string | null {
   if (item.href) return item.href
 
   if (
+    item.questionnaireId &&
     item.sessionId &&
     item.patientId &&
-    SESSION_LINK_TYPES.has(item.type)
+    QUESTIONNAIRE_LINK_TYPES.has(item.type)
   ) {
+    return `/patients/${item.patientId}/sessions/${item.sessionId}/questionnaires/${item.questionnaireId}`
+  }
+
+  if (item.sessionId && item.patientId && SESSION_LINK_TYPES.has(item.type)) {
     return `/patients/${item.patientId}/sessions/${item.sessionId}`
   }
 
-  if (item.patientId && PATIENT_LINK_TYPES.has(item.type)) {
-    return `/patients/${item.patientId}`
-  }
+  if (item.patientId) return `/patients/${item.patientId}`
 
   return null
 }
@@ -181,26 +198,29 @@ export async function createNotification(
     },
     create: {
       userId: data.userId,
+      practiceId: data.practiceId ?? null,
       type: data.type,
       title: data.title,
       body: data.body,
       href: data.href ?? null,
       patientId: data.patientId ?? null,
       sessionId: data.sessionId ?? null,
+      questionnaireId: data.questionnaireId ?? null,
       dedupeKey: data.dedupeKey,
     },
     update: {
       href: data.href ?? undefined,
       patientId: data.patientId ?? undefined,
       sessionId: data.sessionId ?? undefined,
+      questionnaireId: data.questionnaireId ?? undefined,
     },
   })
 }
 
-export async function createSessionSubmitNotifications(
-  ctx: SessionSubmitContext,
+export async function createQuestionnaireSubmitNotifications(
+  ctx: QuestionnaireSubmitContext,
 ): Promise<void> {
-  const payloads = buildSessionSubmitNotifications(ctx)
+  const payloads = buildQuestionnaireSubmitNotifications(ctx)
   await Promise.all(payloads.map((payload) => createNotification(payload)))
 }
 
@@ -214,76 +234,94 @@ export async function createLoginNotification(userId: string): Promise<void> {
   })
 }
 
-export async function resolveUnreviewedForSession(
-  sessionId: string,
+export async function resolveUnreviewedForQuestionnaire(
+  questionnaireId: string,
 ): Promise<void> {
   await prisma.notification.deleteMany({
     where: {
-      sessionId,
+      questionnaireId,
       type: NotificationType.UNREVIEWED_SEVERE,
     },
   })
 }
 
 export async function reconcileOperationalNotifications(
+  db: PrismaLike,
   userId: string,
 ): Promise<void> {
   const now = Date.now()
-  const pendingSessions = await prisma.assessmentSession.findMany({
+  // The fill token is session-level now, so link expiry is judged per session.
+  // Only sessions still waiting on at least one questionnaire are at stake.
+  const openSessions = await db.clinicalSession.findMany({
     where: {
       psychologistId: userId,
-      status: "PENDING",
+      status: { not: "CANCELLED" },
+      questionnaires: { some: { status: "PENDING" } },
     },
     include: {
       patient: { select: { anonymousId: true } },
-      scale: { select: { name: true } },
+      questionnaires: {
+        where: { status: "PENDING" },
+        select: { scale: { select: { name: true } } },
+        orderBy: { order: "asc" },
+      },
     },
   })
 
-  for (const session of pendingSessions) {
-    const href = `/patients/${session.patientId}`
-    const label = `${session.patient.anonymousId} — ${session.scale.name}`
+  for (const clinicalSession of openSessions) {
+    const href = `/patients/${clinicalSession.patientId}/sessions/${clinicalSession.id}`
+    const pendingCount = clinicalSession.questionnaires.length
+    const scales = clinicalSession.questionnaires
+      .map((q) => q.scale.name)
+      .join(", ")
+    const label = `${clinicalSession.patient.anonymousId} — ${clinicalSession.title}`
+    // A direct send has no appointment, so calling its link a "session link"
+    // would send the clinician looking for something that never existed.
+    const linkNoun = clinicalSession.kind === "DIRECT" ? "Questionnaire" : "Session"
 
-    if (isTokenExpired(session.tokenExpiresAt)) {
+    if (isTokenExpired(clinicalSession.tokenExpiresAt)) {
       await createNotification({
         userId,
+        practiceId: clinicalSession.practiceId,
         type: NotificationType.LINK_EXPIRED,
-        dedupeKey: `session:${session.id}:link-expired`,
-        title: "Questionnaire link expired",
-        body: `${label}: patient didn't complete. Send a new link.`,
+        dedupeKey: `session:${clinicalSession.id}:link-expired`,
+        title: `${linkNoun} link expired`,
+        body: `${label}: ${pendingCount} questionnaire${pendingCount === 1 ? "" : "s"} (${scales}) not completed. Renew the link.`,
         href,
-        patientId: session.patientId,
-        sessionId: session.id,
+        patientId: clinicalSession.patientId,
+        sessionId: clinicalSession.id,
       })
 
-      await prisma.assessmentSession.update({
-        where: { id: session.id },
+      await db.questionnaire.updateMany({
+        where: { sessionId: clinicalSession.id, status: "PENDING" },
         data: { status: "EXPIRED" },
       })
       continue
     }
 
-    const msUntilExpiry = session.tokenExpiresAt.getTime() - now
+    const msUntilExpiry = clinicalSession.tokenExpiresAt.getTime() - now
     if (msUntilExpiry <= LINK_EXPIRING_WINDOW_MS) {
       await createNotification({
         userId,
+        practiceId: clinicalSession.practiceId,
         type: NotificationType.LINK_EXPIRING_SOON,
-        dedupeKey: `session:${session.id}:link-expiring`,
-        title: "Questionnaire link expiring soon",
-        body: `${label}: link expires within 24 hours. Send a reminder or create a new link.`,
+        dedupeKey: `session:${clinicalSession.id}:link-expiring`,
+        title: `${linkNoun} link expiring soon`,
+        body: `${label}: link expires within 24 hours with ${pendingCount} questionnaire${pendingCount === 1 ? "" : "s"} outstanding.`,
         href,
-        patientId: session.patientId,
-        sessionId: session.id,
+        patientId: clinicalSession.patientId,
+        sessionId: clinicalSession.id,
       })
     }
   }
 }
 
 export async function listNotifications(
+  db: PrismaLike,
   userId: string,
   limit = 30,
 ): Promise<{ items: Notification[]; unreadCount: number }> {
-  const items = await prisma.notification.findMany({
+  const items = await db.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: limit * 2,
@@ -294,26 +332,73 @@ export async function listNotifications(
     ...item,
     href: resolveNotificationHref(item),
   }))
-  const unreadCount = await prisma.notification.count({
+  const unreadCount = await db.notification.count({
     where: { userId, readAt: null },
   })
 
   return { items: enriched, unreadCount }
 }
 
+/**
+ * Unread suicidal-ideation alerts from the user's *other* practices.
+ *
+ * The one deliberate exception to practice scoping. Everything else in APAS is
+ * confined to the active practice, and rightly so — but a clinician who happens
+ * to be looking at Practice B must not be the last to know that a patient in
+ * Practice A endorsed suicidal ideation. Scoping is a privacy mechanism; it
+ * should never become a reason an alert like this goes unseen.
+ *
+ * Takes the **unscoped** client on purpose: a scoped one cannot see across the
+ * boundary, which is the entire point here. It is still confined to this user's
+ * own notifications, in practices they hold an active membership in — the
+ * membership check is what keeps this from being a hole.
+ *
+ * The practice name is folded into the body so the alert is unmistakably
+ * attributed even in surfaces that only render title and body.
+ */
+export async function listIdeationAlertsElsewhere(
+  db: PrismaLike,
+  userId: string,
+  activePracticeId: string,
+): Promise<Notification[]> {
+  const rows = await db.notification.findMany({
+    where: {
+      userId,
+      type: NotificationType.SUICIDAL_IDEATION,
+      readAt: null,
+      practiceId: { not: null, notIn: [activePracticeId] },
+      practice: { memberships: { some: { userId, status: "ACTIVE" } } },
+    },
+    include: { practice: { select: { slug: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  })
+
+  return rows.map(({ practice, ...item }) => ({
+    ...item,
+    body: practice ? `${item.body} — ${practice.name}` : item.body,
+    href: practice
+      ? practicePath(practice.slug, resolveNotificationHref(item) ?? "/dashboard")
+      : resolveNotificationHref(item),
+  }))
+}
+
 export async function markNotificationRead(
+  db: PrismaLike,
   userId: string,
   id: string,
 ): Promise<boolean> {
-  const result = await prisma.notification.updateMany({
+  const result = await db.notification.updateMany({
     where: { id, userId, readAt: null },
     data: { readAt: new Date() },
   })
   return result.count > 0
 }
 
-export async function markAllNotificationsRead(userId: string): Promise<void> {
-  await prisma.notification.updateMany({
+export async function markAllNotificationsRead(
+  db: PrismaLike,
+  userId: string,
+): Promise<void> {
+  await db.notification.updateMany({
     where: { userId, readAt: null },
     data: { readAt: new Date() },
   })
